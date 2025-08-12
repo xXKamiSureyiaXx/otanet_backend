@@ -54,6 +54,7 @@ class MangaDexClient:
             temp_index = temp_index + 1
 
             chapter_id = chapter["id"]
+            chapter_num = chapter["attributes"]["chapter"]
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
             resp_json = chapter_resp.json()
 
@@ -64,7 +65,7 @@ class MangaDexClient:
             # Making a folder to store the images in. Titles sometimes have 
             # symbols so those will be removed when creating directories
             cleaned_title = re.sub(r'[^a-zA-Z0-9]', '', title)
-            folder_path = f"Mangadex/{cleaned_title}/{chapter_id}"
+            folder_path = f"Mangadex/{cleaned_title}/chapter_{chapter_num}"
             os.makedirs(folder_path, exist_ok=True)
 
             
