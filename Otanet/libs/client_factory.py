@@ -1,10 +1,13 @@
 import requests
 import os
 import re
+import boto3
 
 
 class MangaDexClient:
     def __init__(self):
+        self.s3_client = boto3.client('s3')
+        self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
         self.pagnation_limit = 5
         self.manga_dict = {}
@@ -38,16 +41,24 @@ class MangaDexClient:
                 continue
         return self.manga_list
     
-    def download_chapters(self, title, manga_id):
+    def download_chapters(self, title, cover_img, manga_id):
+        def is_float(s):
+            try:
+                float(s)
+                return True
+            except:
+                return False
+            
         languages = ["en"]
-
         chapters = requests.get(
             f"{self.base_url}/manga/{manga_id}/feed",
             params={"translatedLanguage[]": languages},
         )
+        chapters = list(filter(lambda chapter_num: is_float(chapter_num['attributes']['chapter']) != False, chapters.json()["data"]))
+        chapters = sorted(chapters, key=lambda chapter_num: float(chapter_num['attributes']['chapter']))
 
         temp_index = 0
-        for chapter in chapters.json()["data"]:
+        for chapter in chapters:
             # Temporarily limiting each manga to 3 chapters for the sake of development
             if temp_index >= 3:
                 break
@@ -65,13 +76,24 @@ class MangaDexClient:
             # Making a folder to store the images in. Titles sometimes have 
             # symbols so those will be removed when creating directories
             cleaned_title = re.sub(r'[^a-zA-Z0-9]', '', title)
-            folder_path = f"Mangadex/{cleaned_title}/chapter_{chapter_num}"
+            os.chdir("/tmp/")
+            folder_path = f"{cleaned_title}/chapter_{chapter_num}"
             os.makedirs(folder_path, exist_ok=True)
 
             
             for page in data:
                 print(f"Downloading {chapter_hash}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
-
+                img_data = requests.get(cover_img).content
                 with open(f"{folder_path}/{page}", mode="wb") as f:
                     f.write(r.content)
+                with open(f"{folder_path}/title", mode="wb") as f:
+                    f.write(img_data)
+                try:
+                    s3_obj_title_key = f"{cleaned_title}/0_title/cover_img"
+                    s3_obj_key = f"{cleaned_title}/chapter_{chapter_num}/{page}"
+                    self.s3_client.upload_file(f"{folder_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
+                    self.s3_client.upload_file(f"{folder_path}/title", self.bucket_name, s3_obj_title_key, ExtraArgs={'ContentType': "image/png"})
+                    os.remove(f"{folder_path}/{page}")
+                except Exception as e:
+                    print(f"Error writing PNG to S3: {e}")

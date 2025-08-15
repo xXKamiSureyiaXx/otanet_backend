@@ -10,4 +10,4 @@ class MangaFactory:
         self.client = MangaDexClient()
 
     def download_manga(self):
-        self.client.download_chapters(self.title, self.id)
+        self.client.download_chapters(self.title, self.cover_img, self.id)
