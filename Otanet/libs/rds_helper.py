@@ -20,7 +20,8 @@ class RDSHelper:
             password=self.token,
             database=self.db_name,
             port=self.db_port,
-            ssl={'ca': 'rds-combined-ca-bundle.pem'}
+            sslmode="verify-full",
+            sslrootcert="us-east-1-bundle.pem"
         )
 
     def create_table(self, table_name):
@@ -29,8 +30,30 @@ class RDSHelper:
             id SERIAL PRIMARY KEY,
             title VARCHAR(100) NOT NULL,
             description VARCHAR(2000),
-            tags TEXT []
+            tags TEXT [],
+            hash VARCHAR(255) NOT NULL
         );
         """
         with self.conn.cursor() as cursor:
             cursor.execute(create_table_query)
+    
+    def insert_manga_metadata(self, table_name, manga):
+        insert_metadata_query = f"""
+        INSERT INTO {table_name} (title, description, tags, hash) 
+        VALUES (%s,%s,%s,%s);"""
+
+        insert_data = (manga.get_title(), 
+                       manga.get_description(),
+                       manga.get_tags(),
+                       manga.get_id())
+        
+        with self.conn.cursor() as cursor:
+            try:
+                cursor.execute(insert_metadata_query, insert_data)
+            except psycopg2.Error as e:
+                print(f"Error executing INSERT statement: {e}")
+                self.conn.rollback()
+            self.conn.commit()
+            print("Data inserted successfully")
+        
+    

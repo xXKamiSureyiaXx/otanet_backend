@@ -11,3 +11,16 @@ class MangaFactory:
 
     def download_manga(self):
         self.client.download_chapters(self.title, self.cover_img, self.id)
+    
+    def get_id(self):
+        return self.id
+    
+    def get_title(self):
+        return self.title
+    
+    def get_description(self):
+        return self.description
+    
+    def get_tags(self):
+        return self.tags
+    

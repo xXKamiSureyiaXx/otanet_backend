@@ -19,7 +19,5 @@ manga_list = client.get_manga_list()
 rds_helper.create_table("manga_metadata")
 for manga in manga_list:
     manga_obj = MangaFactory(manga)
-    manga_objs.append(manga_obj)
-
-for obj in manga_objs:
-    obj.download_manga()
+    rds_helper.insert_manga_metadata("manga_metadata", manga_obj)
+    manga_obj.download_manga()
