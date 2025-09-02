@@ -1,8 +1,11 @@
 import sqlite3
+import boto3
 from datetime import datetime
 
 class SQLiteHelper:
     def __init__(self):
+        self.s3_client = boto3.client('s3')
+        self.bucket_name = 'otanet-manga-devo'
         self.conn = sqlite3.connect('otanet_devo.db')
         self.cursor = self.conn.cursor()
     
@@ -16,7 +19,6 @@ class SQLiteHelper:
         return should_insert
 
     def insert_manga_metadata(self, table_name, manga):
-        
         check_hash_query = f"SELECT COUNT(*) FROM {table_name} WHERE hash = ?"
         self.cursor.execute(check_hash_query, (manga.get_id(),))
         should_insert = self.should_insert()
@@ -33,6 +35,10 @@ class SQLiteHelper:
                     manga.get_id(),
                     manga.get_latest_chapter(),
                     datetime.now())
+            
+            if manga.get_latest_chapter() == 0:
+                return
+            
             try:
                 print("Query: ", insert_metadata_query, insert_data)
                 self.cursor.execute(insert_metadata_query, insert_data)
@@ -54,6 +60,10 @@ class SQLiteHelper:
                 print(f"Error executing UPDATE statement: {e}")
                 self.conn.rollback()
             print(f"Successfully updated latest chapter for: {manga.get_id()}")
+        self.data_to_s3()
+
+    def data_to_s3(self):
+        self.s3_client.upload_file(f"otanet_devo.db", self.bucket_name, "database/otanet_devo.db")
 
     def disconnect(self):
         self.conn.close()
