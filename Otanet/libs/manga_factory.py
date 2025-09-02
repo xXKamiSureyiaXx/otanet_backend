@@ -1,4 +1,6 @@
 from client_factory import MangaDexClient
+import pandas as pd
+import os
 
 class MangaFactory:
     def __init__(self, params):
@@ -7,7 +9,9 @@ class MangaFactory:
         self.description = params["description"]
         self.tags = params["tags"]
         self.cover_img = params["cover_img"]
+        self.latest_chapter = 0 
         self.client = MangaDexClient()
+        self.csv_name = 'manga_metadata.csv'
 
     def download_manga(self):
         self.client.download_chapters(self.title, self.cover_img, self.id)
@@ -24,3 +28,37 @@ class MangaFactory:
     def get_tags(self):
         return self.tags
     
+    def get_cover_img(self):
+        return self.cover_img
+    
+    def get_latest_chapter(self):
+        return self.latest_chapter
+    
+    def set_latest_chapter(self, latest_chapter):
+        self.latest_chapter = latest_chapter
+    
+    def should_append(self):
+        append = True
+        existing_data = pd.read_csv(self.csv_name)
+        if self.id in existing_data['id'].values:
+            append = False
+        return append
+    
+    def init_csv(self):
+        if not os.path.exists(self.csv_name):
+            init_csv = pd.DataFrame(columns=['id', 'title', 'description', 'tags'])
+            init_csv.to_csv(self.csv_name)
+
+    #### DEPRECATED ####
+    def store_data(self):
+        self.init_csv()
+        manga_metadata = pd.DataFrame(
+            [{'id':self.id, 'title':self.title, 'description':self.description, 'tags':self.tags}], 
+            columns=['id', 'title', 'description', 'tags'])
+        
+        if self.should_append():
+            with open(self.csv_name, 'a') as f:
+                print("Appending Data")
+                manga_metadata.to_csv(f, header=False)
+        else:
+            print("Data exists in dataframe")

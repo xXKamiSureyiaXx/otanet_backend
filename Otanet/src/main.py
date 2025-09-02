@@ -7,17 +7,19 @@ parent_dir = os.path.abspath(os.path.join(path, os.pardir))
 sys.path.insert(0, f'{parent_dir}//libs')
 from client_factory import MangaDexClient
 from manga_factory import MangaFactory
-from rds_helper import RDSHelper
+from sqlite_helper import SQLiteHelper
 ##################################
 
 
 client = MangaDexClient()
-rds_helper = RDSHelper()
+sqlite_helper = SQLiteHelper()
 
-manga_objs = []
-manga_list = client.get_manga_list()
-rds_helper.create_table("manga_metadata")
-for manga in manga_list:
-    manga_obj = MangaFactory(manga)
-    rds_helper.insert_manga_metadata("manga_metadata", manga_obj)
-    manga_obj.download_manga()
+
+for i in range(5):
+    manga_objs = []
+    offset = i*100
+    manga_list = client.get_recent_manga(offset)
+    for manga in manga_list:
+        manga_obj = MangaFactory(manga)
+        client.download_chapters(manga_obj)
+        sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
