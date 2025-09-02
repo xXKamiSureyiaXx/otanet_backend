@@ -141,7 +141,7 @@ class MangaDexClient:
             cover_response = requests.get(f"{self.base_url}/cover/{manga_relationships['id']}")
             cover_id = cover_response.json()["data"]["attributes"]["fileName"]
 
-            self.manga_dict["cover_img"] = f"https://uploads.mangadex.org/covers/{manga["data"]['id']}/{cover_id}"
+            self.manga_dict["cover_img"] = f"https://uploads.mangadex.org/covers/{manga['data']['id']}/{cover_id}"
             return self.manga_dict
         except:
             raise "Manga Not Found"
