@@ -85,7 +85,9 @@ class MangaDexClient:
 
             # Making a folder to store the images in. Titles sometimes have 
             # symbols so those will be removed when creating directories
-            cleaned_title = re.sub(r'[^a-zA-Z0-9]', '', manga.get_title())
+            cleaned_title = manga.get_title().lower().strip()
+            cleaned_title = re.sub(r"[^a-z0-9 ]", "", cleaned_title)
+            cleaned_title = re.sub(r"\s+", "-", cleaned_title)
             os.makedirs('tmp', exist_ok=True) 
             os.chdir("/tmp/")
             folder_path = f"{manga.get_id()}/chapter_{chapter_num}"
