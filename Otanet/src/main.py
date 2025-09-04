@@ -26,5 +26,6 @@ while True:
             client.download_chapters(manga_obj)
             sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
             time.sleep(10*60)
-    except:
+    except Exception as e:
+        print(f"Failed with: {e}")
         time.sleep(60*60)
