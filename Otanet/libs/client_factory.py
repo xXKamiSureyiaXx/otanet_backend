@@ -88,6 +88,7 @@ class MangaDexClient:
             print(f"Could not latest chapter for manga {manga.get_id()}")
             return 1
         limit = 0
+        sleep = 0
         for chapter in chapters:
             if limit > 25:
                 break
@@ -110,7 +111,7 @@ class MangaDexClient:
             os.chdir("/tmp/")
             folder_path = f"{manga.get_id()}/chapter_{chapter_num}"
             os.makedirs(folder_path, exist_ok=True)
-            time.sleep(15)
+            time.sleep(sleep)
 
             base_key = f"{cleaned_title}/{chapter_num}" 
             s3_resource = boto3.resource('s3')
@@ -132,6 +133,7 @@ class MangaDexClient:
             for page in data:
                 s3_obj_key = f"{cleaned_title}/chapter_{chapter_num}/{page}"
                 if s3_obj_key in keys:
+                    sleep = 3
                     continue
                 print(f"Request for {manga.get_id()}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
@@ -139,6 +141,7 @@ class MangaDexClient:
                 # Check if chapter exists and if it doesn't download it to S3
                 print(f"Downloading {page}")
                 with open(f"{folder_path}/{page}", mode="wb") as f:
+                    sleep = 15
                     limit = limit + 1
                     f.write(r.content)
                 self.s3_client.upload_file(f"{folder_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
