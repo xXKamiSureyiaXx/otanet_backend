@@ -4,6 +4,7 @@ import re
 import boto3
 import botocore.exceptions
 import string
+import time
 
 
 class MangaDexClient:
@@ -95,6 +96,7 @@ class MangaDexClient:
             os.makedirs(folder_path, exist_ok=True)
 
             for page in data:
+                time.sleep(3)
                 print(f"Downloading {chapter_hash}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
                 img_data = requests.get(manga.get_cover_img()).content
