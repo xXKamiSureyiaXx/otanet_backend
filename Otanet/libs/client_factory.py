@@ -46,7 +46,27 @@ class MangaDexClient:
             except:
                 continue
         return self.manga_list
-    
+    def set_latest_chapters(self, manga):
+        def is_float(s):
+            try:
+                float(s)
+                return True
+            except:
+                return False
+        chapters = requests.get(
+            f"{self.base_url}/manga/{manga.get_id()}/feed",
+            params={"translatedLanguage[]": self.languages},
+        )
+        chapters = list(filter(lambda chapter_num: is_float(chapter_num['attributes']['chapter']) != False, chapters.json()["data"]))
+        chapters = sorted(chapters, key=lambda chapter_num: float(chapter_num['attributes']['chapter']))
+        try:
+            latest_chapter = float(chapters[-1]['attributes']['chapter'])
+            manga.set_latest_chapter(latest_chapter)
+            return True
+        except:
+            print(f"Could not latest chapter for manga {manga.get_id()}")
+            return False
+        
     def download_chapters(self, manga):
         def is_float(s):
             try:

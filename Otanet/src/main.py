@@ -23,9 +23,11 @@ while True:
         manga_list = client.get_recent_manga(offset)
         for manga in manga_list:
             manga_obj = MangaFactory(manga)
-            sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
-            client.download_chapters(manga_obj)   
-        time.sleep(10*60)
+            should_download = client.set_latest_chapters(manga_obj)
+            if should_download:
+                sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                client.download_chapters(manga_obj)   
+        time.sleep(5*60)
     except Exception as e:
         print(f"Failed with: {e}")
         time.sleep(60*60)
