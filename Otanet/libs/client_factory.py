@@ -11,7 +11,7 @@ class MangaDexClient:
         self.s3_client = boto3.client('s3')
         self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
-        self.pagnation_limit = 100
+        self.pagnation_limit = 25
         self.manga_dict = {}
         self.manga_list = []
         self.languages = ["en"]
