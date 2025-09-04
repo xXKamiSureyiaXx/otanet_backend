@@ -129,7 +129,7 @@ class MangaDexClient:
                 os.remove(f"{folder_path}/title")
 
             for obj in bucket.objects.filter(Prefix=f"{base_key}/"):
-                keys.append(obj)
+                keys.append(obj.key)
             
             downloaded = False
             for page in data:
