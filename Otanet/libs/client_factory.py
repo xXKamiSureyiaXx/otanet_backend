@@ -88,9 +88,8 @@ class MangaDexClient:
             os.chdir("/tmp/")
             folder_path = f"{manga.get_id()}/chapter_{chapter_num}"
             os.makedirs(folder_path, exist_ok=True)
-
+            time.sleep(15)
             for page in data:
-                time.sleep(2)
                 print(f"Downloading {chapter_hash}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
                 img_data = requests.get(manga.get_cover_img()).content
@@ -116,6 +115,9 @@ class MangaDexClient:
                     self.s3_client.upload_file(f"{folder_path}/title", self.bucket_name, s3_obj_title_key, ExtraArgs={'ContentType': "image/png"})
                     os.remove(f"{folder_path}/title")
             os.chdir(home_dir)
+            self.data_to_s3()
+    def data_to_s3(self):
+        self.s3_client.upload_file(f"otanet_devo.db", self.bucket_name, "database/otanet_devo.db")
 
     def get_requested_manga(self, manga_id):
 
