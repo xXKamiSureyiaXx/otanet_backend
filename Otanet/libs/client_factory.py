@@ -130,6 +130,8 @@ class MangaDexClient:
 
             for obj in bucket.objects.filter(Prefix=f"{base_key}/"):
                 keys.append(obj)
+            
+            downloaded = False
             for page in data:
                 s3_obj_key = f"{cleaned_title}/chapter_{chapter_num}/{page}"
                 if s3_obj_key in keys:
@@ -142,11 +144,13 @@ class MangaDexClient:
                 print(f"Downloading {page}")
                 with open(f"{folder_path}/{page}", mode="wb") as f:
                     sleep = 15
-                    limit = limit + 1
+                    downloaded = True
                     f.write(r.content)
                 self.s3_client.upload_file(f"{folder_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
                 os.remove(f"{folder_path}/{page}")
             os.chdir(home_dir)
+            if downloaded:
+                limit = limit + 1
             self.data_to_s3()
     def data_to_s3(self):
         print("Updating Database")
