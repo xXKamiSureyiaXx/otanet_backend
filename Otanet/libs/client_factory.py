@@ -89,9 +89,8 @@ class MangaDexClient:
             return 1
         limit = 0
         for chapter in chapters:
-            if limit > 100:
+            if limit > 25:
                 break
-            limit = limit + 1
             chapter_id = chapter["id"]
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
@@ -112,34 +111,42 @@ class MangaDexClient:
             folder_path = f"{manga.get_id()}/chapter_{chapter_num}"
             os.makedirs(folder_path, exist_ok=True)
             time.sleep(15)
+
+            base_key = f"{cleaned_title}/{chapter_num}" 
+            s3_resource = boto3.resource('s3')
+            bucket = s3_resource.Bucket('otanet-manga-devo')
+            keys = []
+
+            try:
+                self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_obj_title_key)
+            except:
+                with open(f"{folder_path}/title", mode="wb") as f:
+                    f.write(img_data)
+                    self.s3_client.upload_file(f"{folder_path}/title", self.bucket_name, s3_obj_title_key, ExtraArgs={'ContentType': "image/png"})
+                os.remove(f"{folder_path}/title")
+
+            for obj in bucket.objects.filter(Prefix=f"{base_key}/"):
+                keys.append(obj)
             for page in data:
-                print(f"Downloading {chapter_hash}")
+                s3_obj_key = f"{cleaned_title}/chapter_{chapter_num}/{page}"
+                if s3_obj_key in keys:
+                    continue
+                print(f"Request for {manga.get_id()}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
                 img_data = requests.get(manga.get_cover_img()).content
-
-                s3_obj_key = f"{cleaned_title}/chapter_{chapter_num}/{page}"
                 s3_obj_title_key = f"{cleaned_title}/0_title/cover_img"
 
-
                 # Check if chapter exists and if it doesn't download it to S3
-                try:
-                    self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_obj_key)
-                except:
-                    with open(f"{folder_path}/{page}", mode="wb") as f:
-                        f.write(r.content)
-                    self.s3_client.upload_file(f"{folder_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
-                    os.remove(f"{folder_path}/{page}")
-
-                try:
-                    self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_obj_title_key)
-                except:
-                    with open(f"{folder_path}/title", mode="wb") as f:
-                        f.write(img_data)
-                    self.s3_client.upload_file(f"{folder_path}/title", self.bucket_name, s3_obj_title_key, ExtraArgs={'ContentType': "image/png"})
-                    os.remove(f"{folder_path}/title")
+                print(f"Downloading {page}")
+                with open(f"{folder_path}/{page}", mode="wb") as f:
+                    limit = limit + 1
+                    f.write(r.content)
+                self.s3_client.upload_file(f"{folder_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
+                os.remove(f"{folder_path}/{page}")
             os.chdir(home_dir)
             self.data_to_s3()
     def data_to_s3(self):
+        print("Updating Database")
         self.s3_client.upload_file(f"otanet_devo.db", self.bucket_name, "database/otanet_devo.db")
 
     def get_requested_manga(self, manga_id):
