@@ -68,13 +68,7 @@ class MangaDexClient:
             print(f"Could not latest chapter for manga {manga.get_id()}")
             return 1
 
-        temp_index = 0
         for chapter in chapters:
-            # Temporarily limiting each manga to 3 chapters for the sake of development
-            if temp_index >= 3:
-                break
-            temp_index = temp_index + 1
-
             chapter_id = chapter["id"]
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
