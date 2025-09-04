@@ -87,8 +87,11 @@ class MangaDexClient:
         except Exception as e:
             print(f"Could not latest chapter for manga {manga.get_id()}")
             return 1
-
+        limit = 0
         for chapter in chapters:
+            if limit > 100:
+                break
+            limit = limit + 1
             chapter_id = chapter["id"]
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
