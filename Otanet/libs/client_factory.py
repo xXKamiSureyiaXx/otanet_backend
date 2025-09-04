@@ -88,12 +88,12 @@ class MangaDexClient:
             cleaned_title = manga.get_title().lower().strip()
             cleaned_title = re.sub(r"[^a-z0-9 ]", "", cleaned_title)
             cleaned_title = re.sub(r"\s+", "-", cleaned_title)
+            home_dir = os.getcwd()
             os.makedirs('tmp', exist_ok=True) 
             os.chdir("/tmp/")
             folder_path = f"{manga.get_id()}/chapter_{chapter_num}"
             os.makedirs(folder_path, exist_ok=True)
 
-            
             for page in data:
                 print(f"Downloading {chapter_hash}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
@@ -119,6 +119,7 @@ class MangaDexClient:
                         f.write(img_data)
                     self.s3_client.upload_file(f"{folder_path}/title", self.bucket_name, s3_obj_title_key, ExtraArgs={'ContentType': "image/png"})
                     os.remove(f"{folder_path}/title")
+            os.chdir(home_dir)
 
     def get_requested_manga(self, manga_id):
 
