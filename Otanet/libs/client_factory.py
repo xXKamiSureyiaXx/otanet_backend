@@ -76,7 +76,7 @@ class MangaDexClient:
             temp_index = temp_index + 1
 
             chapter_id = chapter["id"]
-            chapter_num = chapter["attributes"]["chapter"]
+            chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
             resp_json = chapter_resp.json()
 
