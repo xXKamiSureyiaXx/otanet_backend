@@ -32,4 +32,5 @@ while True:
         time.sleep(5*60)
     except Exception as e:
         print(f"Failed with: {e}")
+        print('Sleeping 1 hour')
         time.sleep(60*60)

@@ -146,6 +146,7 @@ class MangaDexClient:
                 s3_obj_key = f"{cleaned_title}/chapter_{chapter_num}/{page}"
                 if get_first_number(page) in keys:
                     sleep = 1
+                    print(f"Skipping page {get_first_number(page)}")
                     continue
                 print(f"Request for {manga.get_id()}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
