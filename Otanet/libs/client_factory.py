@@ -117,6 +117,8 @@ class MangaDexClient:
             bucket = s3_resource.Bucket('otanet-manga-devo')
             keys = []
 
+            img_data = requests.get(manga.get_cover_img()).content
+            s3_obj_title_key = f"{cleaned_title}/0_title/cover_img"
             try:
                 self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_obj_title_key)
             except:
@@ -133,9 +135,7 @@ class MangaDexClient:
                     continue
                 print(f"Request for {manga.get_id()}")
                 r = requests.get(f"{host}/data/{chapter_hash}/{page}")
-                img_data = requests.get(manga.get_cover_img()).content
-                s3_obj_title_key = f"{cleaned_title}/0_title/cover_img"
-
+                
                 # Check if chapter exists and if it doesn't download it to S3
                 print(f"Downloading {page}")
                 with open(f"{folder_path}/{page}", mode="wb") as f:
