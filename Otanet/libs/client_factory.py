@@ -113,7 +113,7 @@ class MangaDexClient:
             os.makedirs(folder_path, exist_ok=True)
             time.sleep(sleep)
 
-            base_key = f"{cleaned_title}/{chapter_num}" 
+            base_key = f"{cleaned_title}/chapter_{chapter_num}" 
             s3_resource = boto3.resource('s3')
             bucket = s3_resource.Bucket('otanet-manga-devo')
             keys = []
