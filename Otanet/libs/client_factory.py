@@ -90,7 +90,7 @@ class MangaDexClient:
         limit = 0
         sleep = 0
         for chapter in chapters:
-            if limit > 25:
+            if limit > 10:
                 break
             chapter_id = chapter["id"]
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
@@ -116,7 +116,7 @@ class MangaDexClient:
             base_key = f"{cleaned_title}/chapter_{chapter_num}" 
             s3_resource = boto3.resource('s3')
             bucket = s3_resource.Bucket('otanet-manga-devo')
-            keys = []
+            
 
             img_data = requests.get(manga.get_cover_img()).content
             s3_obj_title_key = f"{cleaned_title}/0_title/cover_img"
@@ -126,15 +126,25 @@ class MangaDexClient:
                 with open(f"{folder_path}/title", mode="wb") as f:
                     f.write(img_data)
                     self.s3_client.upload_file(f"{folder_path}/title", self.bucket_name, s3_obj_title_key, ExtraArgs={'ContentType': "image/png"})
-                os.remove(f"{folder_path}/title")
+                try:
+                    os.remove(f"{folder_path}/title")
+                except:
+                    continue
 
+            def get_first_number(s):
+                match = re.search(r'\d+', s)
+                if match:
+                    return int(match.group(0))
+                return 0
+            keys = []
             for obj in bucket.objects.filter(Prefix=f"{base_key}/"):
-                keys.append(obj.key)
+                obj = obj.key.rsplit('/')
+                keys.append(get_first_number(obj[2]))
             
             downloaded = False
             for page in data:
                 s3_obj_key = f"{cleaned_title}/chapter_{chapter_num}/{page}"
-                if s3_obj_key in keys:
+                if get_first_number(page) in keys:
                     sleep = 1
                     continue
                 print(f"Request for {manga.get_id()}")
@@ -147,7 +157,10 @@ class MangaDexClient:
                     downloaded = True
                     f.write(r.content)
                 self.s3_client.upload_file(f"{folder_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
-                os.remove(f"{folder_path}/{page}")
+                try:
+                    os.remove(f"{folder_path}/{page}")
+                except:
+                    continue
             os.chdir(home_dir)
             if downloaded:
                 limit = limit + 1
