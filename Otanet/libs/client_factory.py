@@ -12,7 +12,7 @@ class MangaDexClient:
         self.s3_client = boto3.client('s3')
         self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
-        self.pagnation_limit = 25
+        self.pagnation_limit = 10
         self.manga_dict = {}
         self.manga_list = []
         self.languages = ["en"]
@@ -97,10 +97,12 @@ class MangaDexClient:
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
             resp_json = chapter_resp.json()
 
-            host = resp_json["baseUrl"]
-            chapter_hash = resp_json["chapter"]["hash"]
-            data = resp_json["chapter"]["data"]
-
+            try:
+                host = resp_json["baseUrl"]
+                chapter_hash = resp_json["chapter"]["hash"]
+                data = resp_json["chapter"]["data"]
+            except:
+                continue
             # Making a folder to store the images in. Titles sometimes have 
             # symbols so those will be removed when creating directories
             cleaned_title = manga.get_title().lower().strip()
@@ -154,7 +156,7 @@ class MangaDexClient:
                 # Check if chapter exists and if it doesn't download it to S3
                 print(f"Downloading {page}")
                 with open(f"{folder_path}/{page}", mode="wb") as f:
-                    sleep = 15
+                    sleep = 5
                     downloaded = True
                     f.write(r.content)
                 self.s3_client.upload_file(f"{folder_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
