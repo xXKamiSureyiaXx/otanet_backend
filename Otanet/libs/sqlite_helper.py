@@ -48,18 +48,22 @@ class SQLiteHelper:
                 self.conn.rollback()
             print(f"Data inserted successfully: {manga.get_id()}")
         else:
-            update_latest_chapter_query = f"""
+            check_latest_chapter = f"SELECT latest_chapter FROM {table_name} WHERE hash = ?"
+            self.cursor.execute(check_latest_chapter, (manga.get_id()))
+            if self.cursor.fetchone()[0] > manga.get_latest_chapter():
+                update_latest_chapter_query = f"""
                     UPDATE {table_name}
                     SET latest_chapter = {manga.get_latest_chapter()}
+                    SET time = {datetime.now()}
                     WHERE hash = '{manga.get_id()}';"""
-            try:
-                print("Query: ", update_latest_chapter_query)
-                self.cursor.execute(update_latest_chapter_query)
-                self.conn.commit()
-            except sqlite3.Error as e:
-                print(f"Error executing UPDATE statement: {e}")
-                self.conn.rollback()
-            print(f"Successfully updated latest chapter for: {manga.get_id()}")
+                try:
+                    print("Query: ", update_latest_chapter_query)
+                    self.cursor.execute(update_latest_chapter_query)
+                    self.conn.commit()
+                except sqlite3.Error as e:
+                    print(f"Error executing UPDATE statement: {e}")
+                    self.conn.rollback()
+                print(f"Successfully updated latest chapter for: {manga.get_id()}")
         self.data_to_s3()
 
     def data_to_s3(self):
