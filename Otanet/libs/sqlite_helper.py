@@ -51,7 +51,7 @@ class SQLiteHelper:
             check_latest_chapter = f"SELECT latest_chapter FROM {table_name} WHERE hash = '{manga.get_id()}'"
             self.cursor.execute(check_latest_chapter)
             print('Cursor: ', self.cursor.fetchone())
-            if float(self.cursor.fetchone() > float(manga.get_latest_chapter())):
+            if float(self.cursor.fetchone()) > float(manga.get_latest_chapter()):
                 update_latest_chapter_query = f"""
                     UPDATE {table_name}
                     SET latest_chapter = {manga.get_latest_chapter()}
