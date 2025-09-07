@@ -48,7 +48,7 @@ class SQLiteHelper:
                 self.conn.rollback()
             print(f"Data inserted successfully: {manga.get_id()}")
         else:
-            check_latest_chapter = f"SELECT latest_chapter FROM {table_name} WHERE hash = {manga.get_id()}"
+            check_latest_chapter = f"SELECT latest_chapter FROM {table_name} WHERE hash = '{manga.get_id()}'"
             self.cursor.execute(check_latest_chapter)
             print('Cursor: ', self.cursor.fetchone()[0])
             if int(self.cursor.fetchone()[0]) > manga.get_latest_chapter():
