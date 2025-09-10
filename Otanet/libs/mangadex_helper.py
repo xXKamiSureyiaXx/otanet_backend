@@ -151,8 +151,8 @@ class MangaDexHelper:
             # Check if chapter exists and if it doesn't download it to S3
             print(f"Downloading {page}")
             with open(f"{chapter_path}/{page}", mode="wb") as f:
-                page = requests.get(f"{host}/data/{chapter_hash}/{page}")
-                f.write(page.content)
+                page_resp = requests.get(f"{host}/data/{chapter_hash}/{page}")
+                f.write(page_resp.content)
                 self.s3_client.upload_file(f"{chapter_path}/{page}", self.bucket_name, s3_obj_key, ExtraArgs={'ContentType': "image/png"})
                 downloaded = True
             try:
