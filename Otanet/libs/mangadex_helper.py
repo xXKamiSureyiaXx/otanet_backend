@@ -72,6 +72,13 @@ class MangaDexHelper:
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
             chapter_path = f"{manga.get_id()}/chapter_{chapter_num}"
             base_key = f"{title}/chapter_{chapter_num}"
+
+            if chapter != manga.get_chapters()[-1]:
+                try:
+                    self.s3_client.head_object(Bucket=self.bucket_name, Key=base_key)
+                    continue
+                except Exception as e:
+                    print(f"Failed with: {e}")
             
             self.utils.create_tmp_dir(chapter_path)
             print("Dowloading Cover")
