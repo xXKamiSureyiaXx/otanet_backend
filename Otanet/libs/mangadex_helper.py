@@ -59,7 +59,7 @@ class MangaDexHelper:
         
     def download_chapters(self, manga):  
         limit = 0
-        for chapter in manga.get_chapters:
+        for chapter in manga.get_chapters():
             print(f"Request for {manga.get_id()}")
             if limit > 30:
                 break
