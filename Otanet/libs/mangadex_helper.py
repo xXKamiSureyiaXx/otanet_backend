@@ -17,7 +17,7 @@ class MangaDexHelper:
         self.utils = Utils()
         self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
-        self.pagnation_limit = 20
+        self.pagnation_limit = 30
         self.languages = ["en"]
         self.root_directory = os.getcwd()
     
@@ -160,9 +160,11 @@ class MangaDexHelper:
         threads = []
         for page in page_resps:
             path = f"{chapter_path}/{page['page']}"
+            print(path)
             thread = threading.Thread(target=self.threaded_download, args=(page,path,))
             threads.append(thread)
             thread.start()
+            time.sleep(0.1)
 
         return downloaded
     
