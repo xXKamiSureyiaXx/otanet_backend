@@ -73,7 +73,7 @@ class MangaDexHelper:
             
             self.utils.create_tmp_dir(chapter_path)
             self.download_cover(chapter_path, title, manga.get_cover_img())
-            did_download = self.download_pages(chapter_path, chapter['id'], title, self.get_bucket_keys(base_key))
+            did_download = self.download_pages(chapter_path, chapter['id'], title, chapter_num, self.get_bucket_keys(base_key))
             
             os.chdir(self.root_directory)
             self.data_to_s3()
@@ -130,7 +130,7 @@ class MangaDexHelper:
             except:
                 print(f"Failed to remove {path}/title directory")
     
-    def download_pages(self, chapter_path, chapter_id, title, keys):
+    def download_pages(self, chapter_path, chapter_id, title, chapter_num, keys):
         chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
         resp_json = chapter_resp.json()
 
@@ -142,7 +142,7 @@ class MangaDexHelper:
             print(f"Could not host, hash or data: {e}")
 
         for page in data:
-            s3_obj_key = f"{title}/chapter_{title}/{page}"
+            s3_obj_key = f"{title}/chapter_{chapter_num}/{page}"
             if self.utils.get_first_number(page) in keys:
                 print(f"Skipping page {self.utils.get_first_number(page)}")
                 downloaded = False
