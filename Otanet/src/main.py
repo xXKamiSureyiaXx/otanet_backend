@@ -60,6 +60,9 @@ while True:
             print('Sleeping 10 mins')
             time.sleep(60*10)
         else:
-            print("Sleeping for 10 seconds: {e}")
+            print(f"Sleeping for 10 seconds: {e}")
             time.sleep(10)
             continue
+
+
+        
