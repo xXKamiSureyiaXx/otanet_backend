@@ -9,7 +9,7 @@ class Utils:
         return text
     
     def normalize_s3_text(self, text):
-        text = text.get_title().lower().strip()
+        text = text.lower().strip()
         text = re.sub(r"[^a-z0-9 ]", "", text)
         text = re.sub(r"\s+", "-", text)
         return text
