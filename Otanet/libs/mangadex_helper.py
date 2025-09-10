@@ -93,6 +93,7 @@ class MangaDexHelper:
 
             if did_download:
                 limit = limit + 1
+                print(limit)
             time.sleep(2)            
 
     def data_to_s3(self):
