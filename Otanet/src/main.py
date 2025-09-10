@@ -34,9 +34,6 @@ while True:
 
                 print("Downloading Chapters")
                 mangadex_helper.download_chapters(manga_obj) 
-            
-            print('Sleeping 10 seconds')
-            time.sleep(10)  
 
         print('Sleeping 1 minute')
         time.sleep(1*60)
