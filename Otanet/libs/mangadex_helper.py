@@ -159,29 +159,30 @@ class MangaDexHelper:
             print(f"Could not host, hash or data: {e}")
         print("Recieved Response")
 
-        print("Deciding what to skip")
-        page_resps = []
+        threads = []
         for page in data:
+            print("Processing Data")
             s3_obj_key = f"{title}/chapter_{chapter_num}/{page}"
             if self.utils.get_first_number(page) in keys:
                 print(f"Skipping page {self.utils.get_first_number(page)}")
                 downloaded = False
                 continue
             downloaded = True
-            content = requests.get(f"{host}/data/{chapter_hash}/{page}")
-            print("Received Content")
-            page_resps.append({'page': page, 'content': content, 'key': s3_obj_key})
 
-        print("Starting Threads")
-        threads = []
-        for page in page_resps:
+            dict = {
+                'hash': chapter_hash,
+                'host': host,
+                'key': s3_obj_key,
+                'page': page
+            }
             path = f"{chapter_path}/{page['page']}"
             print(path)
-            thread = threading.Thread(target=self.threaded_download, args=(page,path,))
+            print("Starting Threads")
+            thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
             threads.append(thread)
             thread.start()
-            time.sleep(0.06)
-
+            time.sleep(0.1)
+            
         for thread in threads:
             thread.join()
 
@@ -190,12 +191,12 @@ class MangaDexHelper:
     def threaded_download(self, page, path):
         thread_id = threading.get_ident()
         print(f"Thread ID: {thread_id}")
-
+        content = requests.get(f"{page['host']}/data/{page['hash']}/{page}")
         tries = 0
         while tries < 20:
             try:
                 with open(path, mode="wb") as f:
-                    f.write(page['content'].content)
+                    f.write(content.content)
                     self.s3_client.upload_file(path, self.bucket_name, page['key'], ExtraArgs={'ContentType': "image/png"})
             except Exception as e:
                 print(f"Failed to upload: {e}, attempt {tries}")
