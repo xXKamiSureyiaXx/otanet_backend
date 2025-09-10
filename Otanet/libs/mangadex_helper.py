@@ -175,14 +175,14 @@ class MangaDexHelper:
                 'key': s3_obj_key,
                 'page': page
             }
-            path = f"{chapter_path}/{page['page']}"
+            path = f"{chapter_path}/page"
             print(path)
             print("Starting Threads")
             thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
             threads.append(thread)
             thread.start()
             time.sleep(0.1)
-            
+
         for thread in threads:
             thread.join()
 
