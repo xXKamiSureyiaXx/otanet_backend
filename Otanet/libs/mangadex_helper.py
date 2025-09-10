@@ -182,6 +182,7 @@ class MangaDexHelper:
                 print(f"Failed to upload: {e}, attempt {tries}")
                 tries = tries + 1
                 time.sleep(tries)
+                continue
             try:
                 os.remove(path)
                 break
@@ -189,6 +190,7 @@ class MangaDexHelper:
                 print(f"Failed to remove {path}: {e}")
                 tries = tries + 1
                 time.sleep(tries)
+                continue
             
     
     def get_bucket_keys(self, base_key):
