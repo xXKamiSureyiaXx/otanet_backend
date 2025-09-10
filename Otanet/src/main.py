@@ -23,10 +23,16 @@ while True:
         manga_list = mangadex_helper.get_recent_manga(offset)
         for manga in manga_list:
             os.chdir(root_dir)
+            print("Creating Manga Obj")
             manga_obj = MangaFactory(manga)
+
+            print("Setting Latest Chapter")
             should_download = mangadex_helper.set_latest_chapters(manga_obj)
             if should_download:
+                print("Inserting into Database")
                 sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+
+                print("Downloading Chapters")
                 mangadex_helper.download_chapters(manga_obj) 
             time.sleep(10)  
         time.sleep(1*60)

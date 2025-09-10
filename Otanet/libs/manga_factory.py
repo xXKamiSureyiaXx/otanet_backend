@@ -39,8 +39,10 @@ class MangaFactory:
     def set_latest_chapter(self):
         try:
             self.latest_chapter = float(self.chapters[-1]['attributes']['chapter'])
+            return True
         except:
             print(f"Could not set latest chapter for manga {self.id}")
+            return False
 
     def set_chapters(self, chapters):
         chapters = list(filter(lambda chapter_num: self.utils.is_float(chapter_num['attributes']['chapter']) != False, chapters.json()["data"]))
