@@ -37,7 +37,7 @@ while True:
             
             print('Sleeping 10 seconds')
             time.sleep(10)  
-            
+
         print('Sleeping 1 minute')
         time.sleep(1*60)
     except Exception as e:
@@ -46,6 +46,6 @@ while True:
             print('Sleeping 10 mins')
             time.sleep(60*10)
         else:
-            print('Sleeping for 10 seconds')
+            print("Sleeping for 10 seconds: {e}")
             time.sleep(10)
             continue
