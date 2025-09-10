@@ -36,9 +36,9 @@ class MangaFactory:
     def get_chapters(self):
         return self.chapters
     
-    def set_latest_chapter(self, chapters):
+    def set_latest_chapter(self):
         try:
-            self.latest_chapter = float(chapters[-1]['attributes']['chapter'])
+            self.latest_chapter = float(self.chapters[-1]['attributes']['chapter'])
         except:
             print(f"Could not set latest chapter for manga {self.id}")
 

@@ -54,7 +54,7 @@ class MangaDexHelper:
             params={"translatedLanguage[]": self.languages},
         )
         manga.set_chapters(chapters) 
-        manga.set_latest_chapter(chapters)   
+        manga.set_latest_chapter()   
         
     def download_chapters(self, manga):  
         limit = 0
