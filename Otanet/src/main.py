@@ -16,10 +16,13 @@ mangadex_helper = MangaDexHelper()
 sqlite_helper = SQLiteHelper()
 
 root_dir = os.getcwd()
+swap = False
+index = 0
+temp = 0
 while True:
     try:
         manga_objs = []
-        offset = 0*100
+        offset = index*100
         manga_list = mangadex_helper.get_recent_manga(offset)
         for manga in manga_list:
             os.chdir(root_dir)
@@ -33,8 +36,26 @@ while True:
                 sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
 
                 print("Downloading Chapters")
-                mangadex_helper.download_chapters(manga_obj) 
+                mangadex_helper.download_chapters(manga_obj)
+        
+        if swap:
+            index = temp
+            swap = False
+        index = index + 1
 
+        if index > 6:
+            index = 0
+            temp = 0
+
+        if index > 3:
+            temp = index
+            index = 0
+            swap = True
+        
+        
+
+        
+        
         print('Sleeping 1 minute')
         time.sleep(1*60)
     except Exception as e:
