@@ -157,7 +157,9 @@ class MangaDexHelper:
             data = resp_json["chapter"]["data"]
         except Exception as e:
             print(f"Could not host, hash or data: {e}")
+        print("Recieved Response")
 
+        print("Deciding what to skip")
         page_resps = []
         for page in data:
             s3_obj_key = f"{title}/chapter_{chapter_num}/{page}"
@@ -168,6 +170,7 @@ class MangaDexHelper:
             downloaded = True
             page_resps.append({'page': page, 'content': requests.get(f"{host}/data/{chapter_hash}/{page}"), 'key': s3_obj_key})
 
+        print("Starting Threads")
         threads = []
         for page in page_resps:
             path = f"{chapter_path}/{page['page']}"
