@@ -73,13 +73,12 @@ class MangaDexHelper:
             chapter_path = f"{manga.get_id()}/chapter_{chapter_num}"
             base_key = f"{title}/chapter_{chapter_num}"
 
-            if chapter != manga.get_chapters()[-1]:
-                try:
-                    self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=f"{base_key}/", MaxKeys=1)
-                    print(f"Chapter Exists...Skipping: {base_key}")
-                    continue
-                except Exception as e:
-                    print(f"Failed with: {e}")
+
+            s3_dir = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=f"{base_key}/", MaxKeys=1)
+            if s3_dir['KeyCount'] > 0:       
+                print(f"Chapter Exists...Skipping: {base_key}")
+                continue
+
             
             self.utils.create_tmp_dir(chapter_path)
             print("Dowloading Cover")
