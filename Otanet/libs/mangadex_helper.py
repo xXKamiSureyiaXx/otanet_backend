@@ -168,7 +168,9 @@ class MangaDexHelper:
                 downloaded = False
                 continue
             downloaded = True
-            page_resps.append({'page': page, 'content': requests.get(f"{host}/data/{chapter_hash}/{page}"), 'key': s3_obj_key})
+            content = requests.get(f"{host}/data/{chapter_hash}/{page}")
+            print("Received Content")
+            page_resps.append({'page': page, 'content': content, 'key': s3_obj_key})
 
         print("Starting Threads")
         threads = []
