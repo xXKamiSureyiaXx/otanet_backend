@@ -73,7 +73,7 @@ class MangaDexHelper:
             chapter_path = f"{manga.get_id()}/chapter_{chapter_num}"
             base_key = f"{title}/chapter_{chapter_num}"
 
-            if chapter != manga.get_chapters[-1]:
+            if chapter != manga.get_chapters()[-1]:
                 s3_dir = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=f"{base_key}/", MaxKeys=1)
                 if s3_dir['KeyCount'] > 0:       
                     print(f"Chapter Exists...Skipping: {base_key}")
