@@ -34,9 +34,18 @@ while True:
 
                 print("Downloading Chapters")
                 mangadex_helper.download_chapters(manga_obj) 
+            
+            print('Sleeping 10 seconds')
             time.sleep(10)  
+            
+        print('Sleeping 1 minute')
         time.sleep(1*60)
     except Exception as e:
-        print(f"Failed with: {e}")
-        print('Sleeping 10 mins')
-        time.sleep(60*10)
+        if '429' in str(e) or '403' in str(e):
+            print(f"Failed with: {e}")
+            print('Sleeping 10 mins')
+            time.sleep(60*10)
+        else:
+            print('Sleeping for 10 seconds')
+            time.sleep(10)
+            continue
