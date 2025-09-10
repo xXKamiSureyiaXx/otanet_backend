@@ -178,25 +178,26 @@ class MangaDexHelper:
             path = f"{chapter_path}/page"
             print(path)
             print("Starting Threads")
-            self.threaded_download(dict, path)
-            #thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
-            #threads.append(thread)
-            #thread.start()
-            #time.sleep(1)
+            thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
+            threads.append(thread)
+            thread.start()
+            time.sleep(0.3)
 
         for thread in threads:
             thread.join()
 
         return downloaded
     
-    def threaded_download(self, page, path):
-        content = requests.get(f"{page['host']}/data/{page['hash']}/{page['page']}")
+    def threaded_download(self, dict, path):
+        thread_id = threading.get_ident()
+        print(f"Thread ID: {thread_id}")
+        content = requests.get(f"{dict['host']}/data/{dict['hash']}/{dict['page']}")
         tries = 0
         while tries < 20:
             try:
                 with open(path, mode="wb") as f:
                     f.write(content.content)
-                    self.s3_client.upload_file(path, self.bucket_name, page['key'], ExtraArgs={'ContentType': "image/png"})
+                    self.s3_client.upload_file(path, self.bucket_name, dict['key'], ExtraArgs={'ContentType': "image/png"})
                     break
             except Exception as e:
                 print(f"Failed to upload: {e}, attempt {tries}")
