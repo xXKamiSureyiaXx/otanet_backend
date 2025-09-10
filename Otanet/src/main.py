@@ -51,11 +51,7 @@ while True:
             temp = index
             index = 0
             swap = True
-        
-        
 
-        
-        
         print('Sleeping 1 minute')
         time.sleep(1*60)
     except Exception as e:
