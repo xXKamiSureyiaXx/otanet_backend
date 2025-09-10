@@ -62,6 +62,7 @@ class MangaDexHelper:
         limit = 0
         for chapter in manga.get_chapters():
             print(f"Request for {manga.get_id()}")
+            print(f"Starting download for index {limit}")
             if limit > 30:
                 break
 
@@ -73,7 +74,10 @@ class MangaDexHelper:
             base_key = f"{title}/chapter_{chapter_num}"
             
             self.utils.create_tmp_dir(chapter_path)
+            print("Dowloading Cover")
             self.download_cover(chapter_path, title, manga.get_cover_img())
+
+            print("Downloading Chapters")
             did_download = self.download_pages(chapter_path, chapter['id'], title, chapter_num, self.get_bucket_keys(base_key))
             
             os.chdir(self.root_directory)
