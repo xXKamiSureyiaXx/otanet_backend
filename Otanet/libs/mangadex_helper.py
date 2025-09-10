@@ -181,7 +181,7 @@ class MangaDexHelper:
             thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
             threads.append(thread)
             thread.start()
-            time.sleep(0.3)
+            time.sleep(0.1)
 
         for thread in threads:
             thread.join()
