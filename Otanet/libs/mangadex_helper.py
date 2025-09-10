@@ -132,9 +132,10 @@ class MangaDexHelper:
                 print(f"Failed to remove {path}/title directory")
     
     def download_pages(self, chapter_path, chapter_id, title, chapter_num, keys):
+        downloaded = False
         chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
         resp_json = chapter_resp.json()
-
+  
         try:
             host = resp_json["baseUrl"]
             chapter_hash = resp_json["chapter"]["hash"]
@@ -153,6 +154,7 @@ class MangaDexHelper:
             page_resps.append({'page': page, 'content': requests.get(f"{host}/data/{chapter_hash}/{page}"), 'key': s3_obj_key})
 
         threads = []
+        thread
         for page in page_resps:
             path = f"{chapter_path}/{page['page']}"
             thread = threading.Thread(target=self.threaded_download, args=(page,path,))
@@ -165,6 +167,9 @@ class MangaDexHelper:
         return downloaded
     
     def threaded_download(self, page, path):
+        thread_id = threading.get_ident()
+        print(f"Thread ID: {thread_id}")
+        
         with open(path, mode="wb") as f:
                 f.write(page['content'].content)
                 self.s3_client.upload_file(path, self.bucket_name, page['key'], ExtraArgs={'ContentType': "image/png"})
