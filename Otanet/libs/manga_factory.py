@@ -1,6 +1,7 @@
-from client_factory import MangaDexClient
+from mangadex_helper import MangaDexHelper
 import pandas as pd
 import os
+from utils import Utils
 
 class MangaFactory:
     def __init__(self, params):
@@ -10,11 +11,9 @@ class MangaFactory:
         self.tags = params["tags"]
         self.cover_img = params["cover_img"]
         self.latest_chapter = 0 
-        self.client = MangaDexClient()
+        self.chapters = []
+        self.utils = Utils()
         self.csv_name = 'manga_metadata.csv'
-
-    def download_manga(self):
-        self.client.download_chapters(self.title, self.cover_img, self.id)
     
     def get_id(self):
         return self.id
@@ -34,8 +33,19 @@ class MangaFactory:
     def get_latest_chapter(self):
         return self.latest_chapter
     
-    def set_latest_chapter(self, latest_chapter):
-        self.latest_chapter = latest_chapter
+    def get_chapters(self):
+        return self.chapters
+    
+    def set_latest_chapter(self, chapters):
+        try:
+            self.latest_chapter = float(chapters[-1]['attributes']['chapter'])
+        except:
+            print(f"Could not set latest chapter for manga {self.id}")
+
+    def set_chapters(self, chapters):
+        chapters = list(filter(lambda chapter_num: self.utils.is_float(chapter_num['attributes']['chapter']) != False, chapters.json()["data"]))
+        chapters = sorted(chapters, key=lambda chapter_num: float(chapter_num['attributes']['chapter']))
+        self.chapters = chapters
     
     def should_append(self):
         append = True
