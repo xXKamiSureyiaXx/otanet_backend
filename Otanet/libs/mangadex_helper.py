@@ -164,7 +164,7 @@ class MangaDexHelper:
             thread = threading.Thread(target=self.threaded_download, args=(page,path,))
             threads.append(thread)
             thread.start()
-            time.sleep(0.15)
+            time.sleep(0.06)
 
         return downloaded
     
@@ -172,13 +172,23 @@ class MangaDexHelper:
         thread_id = threading.get_ident()
         print(f"Thread ID: {thread_id}")
 
-        with open(path, mode="wb") as f:
-                f.write(page['content'].content)
-                self.s3_client.upload_file(path, self.bucket_name, page['key'], ExtraArgs={'ContentType': "image/png"})
-        try:
-            os.remove(path)
-        except Exception as e:
-            print(f"Failed to remove {path}: {e}")
+        tries = 0
+        while tries < 20:
+            try:
+                with open(path, mode="wb") as f:
+                    f.write(page['content'].content)
+                    self.s3_client.upload_file(path, self.bucket_name, page['key'], ExtraArgs={'ContentType': "image/png"})
+            except Exception as e:
+                print(f"Failed to upload: {e}, attempt {tries}")
+                tries = tries + 1
+                time.sleep(tries)
+            try:
+                os.remove(path)
+                break
+            except Exception as e:
+                print(f"Failed to remove {path}: {e}")
+                tries = tries + 1
+                time.sleep(tries)
             
     
     def get_bucket_keys(self, base_key):
