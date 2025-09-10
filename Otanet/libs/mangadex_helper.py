@@ -78,6 +78,8 @@ class MangaDexHelper:
                 if s3_dir['KeyCount'] > 0:       
                     print(f"Chapter Exists...Skipping: {base_key}")
                     continue
+                else:
+                    print("Chapter does not Exist...Continuing")
 
             
             self.utils.create_tmp_dir(chapter_path)
@@ -144,6 +146,7 @@ class MangaDexHelper:
                 print(f"Failed to remove {path}/title directory")
     
     def download_pages(self, chapter_path, chapter_id, title, chapter_num, keys):
+        print("Starting Download for Pages")
         downloaded = False
         chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
         resp_json = chapter_resp.json()
@@ -206,6 +209,7 @@ class MangaDexHelper:
     
     def get_bucket_keys(self, base_key):
         keys = []
+        print("Getting Keys")
         for obj in self.bucket.objects.filter(Prefix=f"{base_key}/"):
             obj = obj.key.rsplit('/')
             keys.append(self.utils.get_first_number(obj[2]))
