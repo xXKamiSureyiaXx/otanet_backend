@@ -17,7 +17,7 @@ class MangaDexHelper:
         self.utils = Utils()
         self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
-        self.pagnation_limit = 30
+        self.pagnation_limit = 100
         self.languages = ["en"]
         self.root_directory = os.getcwd()
     
@@ -63,7 +63,7 @@ class MangaDexHelper:
         for chapter in manga.get_chapters():
             print(f"Request for {manga.get_id()}")
             print(f"Starting download for index {limit}")
-            if limit > 30:
+            if limit > 50:
                 break
 
             # Making a folder to store the images in. Titles sometimes have 
