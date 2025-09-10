@@ -178,10 +178,11 @@ class MangaDexHelper:
             path = f"{chapter_path}/page"
             print(path)
             print("Starting Threads")
-            thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
-            threads.append(thread)
-            thread.start()
-            time.sleep(1)
+            self.threaded_download(dict, path)
+            #thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
+            #threads.append(thread)
+            #thread.start()
+            #time.sleep(1)
 
         for thread in threads:
             thread.join()
@@ -198,6 +199,7 @@ class MangaDexHelper:
                 with open(path, mode="wb") as f:
                     f.write(content.content)
                     self.s3_client.upload_file(path, self.bucket_name, page['key'], ExtraArgs={'ContentType': "image/png"})
+                    break
             except Exception as e:
                 print(f"Failed to upload: {e}, attempt {tries}")
                 tries = tries + 1
@@ -209,7 +211,6 @@ class MangaDexHelper:
             except Exception as e:
                 print(f"Failed to remove {path}: {e}")
                 tries = tries + 1
-                time.sleep(tries)
                 continue
             
     
