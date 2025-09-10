@@ -75,7 +75,7 @@ class MangaDexHelper:
 
             if chapter != manga.get_chapters()[-1]:
                 try:
-                    self.s3_client.head_object(Bucket=self.bucket_name, Key=base_key)
+                    self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=f"{base_key}/", MaxKeys=1)
                     continue
                 except Exception as e:
                     print(f"Failed with: {e}")
