@@ -190,9 +190,7 @@ class MangaDexHelper:
         return downloaded
     
     def threaded_download(self, page, path):
-        thread_id = threading.get_ident()
-        print(f"Thread ID: {thread_id}")
-        content = requests.get(f"{page['host']}/data/{page['hash']}/{page}")
+        content = requests.get(f"{page['host']}/data/{page['hash']}/{page['page']}")
         tries = 0
         while tries < 20:
             try:
