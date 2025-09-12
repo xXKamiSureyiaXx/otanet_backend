@@ -37,6 +37,7 @@ while True:
 
                 print("Downloading Chapters")
                 mangadex_helper.download_chapters(manga_obj)
+            print("Sleeping 1 minute")
             time.sleep(1*60)
         
         if swap:
