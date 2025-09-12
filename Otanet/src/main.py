@@ -22,7 +22,7 @@ temp = 0
 while True:
     try:
         manga_objs = []
-        offset = index*100
+        offset = index*25
         manga_list = mangadex_helper.get_recent_manga(offset)
         for manga in manga_list:
             os.chdir(root_dir)
@@ -37,6 +37,7 @@ while True:
 
                 print("Downloading Chapters")
                 mangadex_helper.download_chapters(manga_obj)
+            time.sleep(1*60)
         
         if swap:
             index = temp
@@ -52,16 +53,16 @@ while True:
             index = 0
             swap = True
 
-        print('Sleeping 1 minute')
-        time.sleep(1*60)
+        print('Sleeping 10 minute')
+        time.sleep(10*60)
     except Exception as e:
         if '429' in str(e) or '403' in str(e):
             print(f"Failed with: {e}")
             print('Sleeping 10 mins')
             time.sleep(60*10)
         else:
-            print(f"Sleeping for 10 seconds: {e}")
-            time.sleep(10)
+            print(f"Sleeping for 5 minutes: {e}")
+            time.sleep(5*10)
             continue
 
 

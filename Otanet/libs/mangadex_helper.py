@@ -17,7 +17,7 @@ class MangaDexHelper:
         self.utils = Utils()
         self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
-        self.pagnation_limit = 100
+        self.pagnation_limit = 25
         self.languages = ["en"]
         self.root_directory = os.getcwd()
     
