@@ -88,7 +88,7 @@ class MangaDexHelper:
 
             print("Downloading Chapters")
             did_download = self.download_pages(chapter_path, chapter['id'], title, chapter_num, self.get_bucket_keys(base_key))
-            
+            self.utils.clear_chapter_dir(chapter_path)
             os.chdir(self.root_directory)
             self.data_to_s3()
 
