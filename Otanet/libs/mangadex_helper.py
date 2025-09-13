@@ -148,20 +148,23 @@ class MangaDexHelper:
     def download_pages(self, chapter_path, chapter_id, title, chapter_num, keys):
         print("Starting Download for Pages")
         downloaded = False
-        chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
-        resp_json = chapter_resp.json()
 
         retries = 0
         while retries <= 10:
+            chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
+            resp_json = chapter_resp.json()
             try:
                 host = resp_json["baseUrl"]
                 chapter_hash = resp_json["chapter"]["hash"]
                 data = resp_json["chapter"]["data"]
+                print("Recieved Response")
+                break
             except Exception as e:
                 retries = retries + 1
                 print(f"Could not host, hash or data: {e}, attempt {retries}")
-            print("Recieved Response")
-
+                time.sleep(retries)
+                continue
+            
         threads = []
         for page in data:
             print("Processing Data")
