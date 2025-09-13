@@ -201,11 +201,12 @@ class MangaDexHelper:
                     break
             except Exception as e:
                 print(f"Failed to upload: {e}, attempt {tries}")
+                self.utils.clear_chapter_dir(path)
                 tries = tries + 1
                 time.sleep(tries)
                 continue
             try:
-                os.remove(path)
+                self.utils.clear_chapter_dir(path)
                 break
             except Exception as e:
                 print(f"Failed to remove {path}: {e}")

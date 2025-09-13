@@ -1,6 +1,7 @@
 import os
 import re
 import string
+import shutil
 
 class Utils:
     def normalize_database_text(self, text):
@@ -31,3 +32,6 @@ class Utils:
         os.makedirs('tmp', exist_ok=True) 
         os.chdir("/tmp/")
         os.makedirs(path, exist_ok=True)
+
+    def clear_chapter_dir(self, path):
+         shutil.rmtree(path, ignore_errors=True)
