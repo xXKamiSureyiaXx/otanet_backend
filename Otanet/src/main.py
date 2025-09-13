@@ -57,6 +57,7 @@ while True:
         print('Sleeping 10 minute')
         time.sleep(10*60)
     except Exception as e:
+        index = index + 1
         if '429' in str(e) or '403' in str(e):
             print(f"Failed with: {e}")
             print('Sleeping 10 mins')
