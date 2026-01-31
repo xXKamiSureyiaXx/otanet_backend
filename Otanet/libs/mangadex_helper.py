@@ -62,7 +62,7 @@ class MangaDexHelper:
         
     def download_chapters(self, manga):  
         for chapter in manga.get_chapters():
-            time.sleep(1)
+            time.sleep(5)
             print(f"Request for {manga.get_id()}")
 
             # Making a folder to store the images in. Titles sometimes have 
