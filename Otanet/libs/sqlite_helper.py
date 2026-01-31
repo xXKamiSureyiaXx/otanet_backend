@@ -98,6 +98,7 @@ class SQLiteHelper:
 
     def store_page_url(self, manga_id, manga_name, chapter_num, page_number, page_url):
         """Store page URL information to the manga-specific table"""
+        manga_id = manga_id.replace("-", "_")  # SQLite table names cannot have hyphens
         try:
             # Assume table exists (created prior to threading). Insert under lock.
             insert_page_query = f"INSERT INTO [{manga_id}] (manga_name, chapter_num, page_number, page_url, timestamp) VALUES (?, ?, ?, ?, ?);"
