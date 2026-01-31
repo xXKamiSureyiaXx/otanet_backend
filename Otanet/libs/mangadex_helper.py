@@ -91,7 +91,7 @@ class MangaDexHelper:
             self.download_cover(chapter_path, title, manga.get_cover_img())
             '''
             print("Storing Page URLs to Database")
-            self.store_page_url_to_database(chapter['id'], title, chapter_num, manga.get_pages(), manga.get_id())
+            self.store_page_url_to_database(chapter['id'], title, chapter_num, manga.get_id())
             '''
             print("Downloading Chapters")
             did_download = self.download_pages(chapter_path, chapter['id'], title, chapter_num, self.get_bucket_keys(base_key))
@@ -155,7 +155,7 @@ class MangaDexHelper:
             except:
                 print(f"Failed to remove {path}/title directory")
     
-    def store_page_url_to_database(self, chapter_id, title, chapter_num, pages, manga_id):
+    def store_page_url_to_database(self, chapter_id, title, chapter_num, manga_id):
         print("Storing Page URLs to Database")
 
         retries = 0
