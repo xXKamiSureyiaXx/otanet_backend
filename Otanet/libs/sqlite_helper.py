@@ -18,6 +18,26 @@ class SQLiteHelper:
 
         return should_insert
 
+    def create_page_urls_table(self, manga_id):
+        """Create a page URLs table for a specific manga using manga_id as the table name"""
+        try:
+            create_table_query = f"""
+                CREATE TABLE IF NOT EXISTS [{manga_id}] (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    manga_name TEXT NOT NULL,
+                    chapter_num TEXT NOT NULL,
+                    page_number TEXT NOT NULL,
+                    page_url TEXT NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+            """
+            self.cursor.execute(create_table_query)
+            self.conn.commit()
+            print(f"Table [{manga_id}] created or already exists")
+        except sqlite3.Error as e:
+            print(f"Error creating table [{manga_id}]: {e}")
+            self.conn.rollback()
+
     def insert_manga_metadata(self, table_name, manga):
         check_hash_query = f"SELECT COUNT(*) FROM {table_name} WHERE hash = ?"
         self.cursor.execute(check_hash_query, (manga.get_id(),))
@@ -69,6 +89,27 @@ class SQLiteHelper:
     def data_to_s3(self):
         self.s3_client.upload_file(f"otanet_devo.db", self.bucket_name, "database/otanet_devo.db")
 
+    def store_page_url(self, manga_id, manga_name, chapter_num, page_number, page_url):
+        """Store page URL information to the manga-specific table"""
+        try:
+            # Create table if it doesn't exist
+            self.create_page_urls_table(manga_id)
+            
+            insert_page_query = f"""
+                INSERT INTO [{manga_id}] (manga_name, chapter_num, page_number, page_url, timestamp)
+                VALUES (?, ?, ?, ?, ?);
+            """
+            
+            insert_data = (manga_name, chapter_num, page_number, page_url, datetime.now())
+            
+            print(f"Query: {insert_page_query}, Data: {insert_data}")
+            self.cursor.execute(insert_page_query, insert_data)
+            self.conn.commit()
+            print(f"Page URL stored successfully in table [{manga_id}]: {manga_name} - Chapter {chapter_num} - Page {page_number}")
+            self.data_to_s3()
+        except sqlite3.Error as e:
+            print(f"Error storing page URL to database: {e}")
+            self.conn.rollback()
+
     def disconnect(self):
         self.conn.close()
-        

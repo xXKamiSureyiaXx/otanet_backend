@@ -7,6 +7,7 @@ import string
 import time
 import threading
 from utils import Utils
+from sqlite_helper import SQLiteHelper
 
 
 class MangaDexHelper:
@@ -15,6 +16,7 @@ class MangaDexHelper:
         self.s3_resource = boto3.resource('s3')
         self.bucket = self.s3_resource.Bucket('otanet-manga-devo')
         self.utils = Utils()
+        self.db = SQLiteHelper()
         self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
         self.pagnation_limit = 25
@@ -73,6 +75,7 @@ class MangaDexHelper:
             chapter_path = f"{manga.get_id()}/chapter_{chapter_num}"
             base_key = f"{title}/chapter_{chapter_num}"
 
+            '''
             if chapter != manga.get_chapters()[-1]:
                 s3_dir = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=f"{base_key}/", MaxKeys=1)
                 if s3_dir['KeyCount'] > 0:       
@@ -80,22 +83,29 @@ class MangaDexHelper:
                     continue
                 else:
                     print("Chapter does not Exist...Continuing")
-
+            '''
             
+            '''
             self.utils.create_tmp_dir(chapter_path)
             print("Dowloading Cover")
             self.download_cover(chapter_path, title, manga.get_cover_img())
-
+            '''
+            print("Storing Page URLs to Database")
+            self.store_page_url_to_database(chapter['id'], title, chapter_num, manga.get_pages(), manga.get_id())
+            '''
             print("Downloading Chapters")
             did_download = self.download_pages(chapter_path, chapter['id'], title, chapter_num, self.get_bucket_keys(base_key))
             self.utils.clear_chapter_dir(chapter_path)
+            '''
             os.chdir(self.root_directory)
             self.data_to_s3()
 
+            '''
             if did_download:
                 limit = limit + 1
                 print(limit)
-            time.sleep(2)            
+            '''
+            time.sleep(2)       
 
     def data_to_s3(self):
         print("Updating Database")
@@ -144,6 +154,42 @@ class MangaDexHelper:
                 os.remove(directory)
             except:
                 print(f"Failed to remove {path}/title directory")
+    
+    def store_page_url_to_database(self, chapter_id, title, chapter_num, pages, manga_id):
+        print("Storing Page URLs to Database")
+
+        retries = 0
+        while retries <= 10:
+            chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
+            resp_json = chapter_resp.json()
+            try:
+                host = resp_json["baseUrl"]
+                chapter_hash = resp_json["chapter"]["hash"]
+                data = resp_json["chapter"]["data"]
+                print("Recieved Response")
+                break
+            except Exception as e:
+                retries = retries + 1
+                print(f"Could not host, hash or data: {e}, attempt {retries}")
+                time.sleep(retries)
+                continue
+        threads = []
+        for page in data:
+            dict = {
+                'hash': chapter_hash,
+                'host': host,
+                'page': page,
+                'title': title,
+                'chapter_num': chapter_num,
+                'manga_id': manga_id
+                }
+            thread = threading.Thread(target=self.threaded_store_page_url, args=(dict, title, chapter_num, manga_id))
+            threads.append(thread)
+            thread.start()
+    
+        for thread in threads:
+            thread.join()
+            
     
     def download_pages(self, chapter_path, chapter_id, title, chapter_num, keys):
         print("Starting Download for Pages")
@@ -218,6 +264,29 @@ class MangaDexHelper:
                 print(f"Failed to remove {path}: {e}")
                 tries = tries + 1
                 continue
+
+    def threaded_store_page_url(self, dict, title, chapter_num, manga_id):
+        thread_id = threading.get_ident()
+        print(f"Thread ID: {thread_id}")
+        
+        # Construct the image URL
+        image_url = f"{dict['host']}/data/{dict['hash']}/{dict['page']}"
+        
+        # Extract page number from page filename
+        page_number = self.utils.get_first_number(dict['page'])
+        
+        # Store page URL to database
+        try:
+            self.db.store_page_url(
+                manga_id=manga_id,
+                manga_name=title,
+                chapter_num=chapter_num,
+                page_number=page_number,
+                page_url=image_url
+            )
+            print(f"Stored page URL for {title} chapter {chapter_num} page {page_number}")
+        except Exception as e:
+            print(f"Failed to store page URL to database: {e}")
             
     
     def get_bucket_keys(self, base_key):
