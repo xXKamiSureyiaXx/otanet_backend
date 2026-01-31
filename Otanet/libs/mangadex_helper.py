@@ -94,7 +94,6 @@ class MangaDexHelper:
             self.utils.clear_chapter_dir(chapter_path)
             '''
             os.chdir(self.root_directory)
-            self.data_to_s3()
 
             '''
             if did_download:

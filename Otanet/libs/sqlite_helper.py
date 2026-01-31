@@ -119,7 +119,6 @@ class SQLiteHelper:
                         print(f"Successfully updated latest chapter for: {manga.get_id()}")
                 
                 conn.close()
-                self.data_to_s3()
                 break
                 
             except sqlite3.OperationalError as e:
@@ -165,7 +164,6 @@ class SQLiteHelper:
                 print(f"Page URL stored successfully in table [{manga_id}]: {manga_name} - Chapter {chapter_num} - Page {page_number}")
                 
                 conn.close()
-                self.data_to_s3()
                 break
                 
             except sqlite3.OperationalError as e:

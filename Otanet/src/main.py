@@ -42,6 +42,7 @@ def worker_thread(worker_id, offset_queue, root_dir):
                     
                     print(f"[Worker {worker_id}] Downloading chapters for {manga_obj.get_title()}")
                     mangadex_helper.download_chapters(manga_obj)
+                sqlite_helper.data_to_s3()
                     
                 print(f"[Worker {worker_id}] Processed (or skipped); sleeping briefly")
                 time.sleep(1)
