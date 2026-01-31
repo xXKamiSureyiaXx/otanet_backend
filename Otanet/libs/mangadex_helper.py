@@ -62,6 +62,7 @@ class MangaDexHelper:
         
     def download_chapters(self, manga):  
         for chapter in manga.get_chapters():
+            time.sleep(1)
             print(f"Request for {manga.get_id()}")
 
             # Making a folder to store the images in. Titles sometimes have 
@@ -157,6 +158,11 @@ class MangaDexHelper:
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
             resp_json = chapter_resp.json()
             print("Response JSON: ", resp_json)
+
+            if('Rate Limit Exceeded' in string(resp_json)):
+                print("Rate Limited...Backing off for 2 minutes")
+                time.sleep(60 * 2)
+                continue
             try:
                 host = resp_json["baseUrl"]
                 chapter_hash = resp_json["chapter"]["hash"]
