@@ -1,86 +1,117 @@
 import os
 import sys
 import time
+from queue import Queue
+from threading import Thread
 path = os.getcwd()
 parent_dir = os.path.abspath(os.path.join(path, os.pardir))
-
 ###### Import Player Object ######
 sys.path.insert(0, f'{parent_dir}//libs')
 from mangadex_helper import MangaDexHelper
 from manga_factory import MangaFactory
 from sqlite_helper import SQLiteHelper
-from concurrent.futures import ThreadPoolExecutor, as_completed
 ##################################
 
+def worker_thread(worker_id, offset_queue, mangadex_helper, sqlite_helper, root_dir):
+    """Each worker continuously processes manga from offset queue"""
+    while True:
+        try:
+            offset = offset_queue.get()
+            if offset is None:  # Poison pill to stop thread
+                break
+                
+            print(f"[Worker {worker_id}] Processing offset {offset}")
+            
+            manga_list = mangadex_helper.get_recent_manga(offset)
+            
+            for manga in manga_list:
+                os.chdir(root_dir)
+                print(f"[Worker {worker_id}] Creating Manga Obj")
+                manga_obj = MangaFactory(manga)
+                
+                print(f"[Worker {worker_id}] Setting Latest Chapter")
+                should_download = mangadex_helper.set_latest_chapters(manga_obj)
+                
+                if should_download:
+                    print(f"[Worker {worker_id}] Inserting into Database")
+                    sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                    
+                    print(f"[Worker {worker_id}] Downloading chapters for {manga_obj.get_title()}")
+                    mangadex_helper.download_chapters(manga_obj)
+                    
+                print(f"[Worker {worker_id}] Processed (or skipped); sleeping briefly")
+                time.sleep(1)
+            
+            offset_queue.task_done()
+            
+        except Exception as e:
+            if '429' in str(e) or '403' in str(e):
+                print(f"[Worker {worker_id}] Rate limited: {e}")
+                time.sleep(60)  # Back off for a minute
+            else:
+                print(f"[Worker {worker_id}] Error: {e}")
+                time.sleep(5)
+            offset_queue.task_done()
 
+# Main execution
 mangadex_helper = MangaDexHelper()
 sqlite_helper = SQLiteHelper()
 sqlite_helper.create_metadata_table('manga_metadata')
-
 root_dir = os.getcwd()
-swap = False
+
+# Create queue for work distribution
+offset_queue = Queue()
+
+# Start 10 worker threads
+NUM_WORKERS = 10
+workers = []
+for i in range(NUM_WORKERS):
+    t = Thread(target=worker_thread, args=(i, offset_queue, mangadex_helper, sqlite_helper, root_dir))
+    t.daemon = True
+    t.start()
+    workers.append(t)
+
+print(f"Started {NUM_WORKERS} worker threads")
+
+# Main loop: continuously add offsets to the queue
 index = 0
 temp = 0
+swap = False
+
 while True:
     try:
-        manga_objs = []
-        offset = index*10
-        manga_list = mangadex_helper.get_recent_manga(offset)
-        # Collect manga objects that need downloading, insert metadata synchronously
-        to_download = []
-        for manga in manga_list:
-            os.chdir(root_dir)
-            print("Creating Manga Obj")
-            manga_obj = MangaFactory(manga)
-
-            print("Setting Latest Chapter")
-            should_download = mangadex_helper.set_latest_chapters(manga_obj)
-            if should_download:
-                print("Inserting into Database")
-                sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
-                to_download.append(manga_obj)
-            print("Queued (or skipped); sleeping briefly to avoid rate limits")
-            time.sleep(1)
-
-        # Run downloads with up to 10 concurrent threads
-        if to_download:
-            print(f"Starting threaded downloads for {len(to_download)} manga(s) with up to 10 workers")
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                future_to_manga = {executor.submit(mangadex_helper.download_chapters, m): m for m in to_download}
-                for future in as_completed(future_to_manga):
-                    m = future_to_manga[future]
-                    try:
-                        result = future.result()
-                        print(f"Finished download task for {m.get_title()}")
-                    except Exception as e:
-                        print(f"Download task raised for {m.get_title()}: {e}")
+        # Add next batch of offsets to queue (10 offsets for 10 workers)
+        for i in range(NUM_WORKERS):
+            offset = (index + i) * 10
+            offset_queue.put(offset)
+            print(f"[Main] Queued offset {offset}")
         
+        # Update index using your existing logic
         if swap:
             index = temp
             swap = False
         index = index + 1
-
         if index > 6:
             index = 0
             temp = 0
-
         if index > 3:
             temp = index
             index = 0
             swap = True
-
-        print('Sleeping 10 minute')
-        time.sleep(10*60)
-    except Exception as e:
-        index = index + 1
-        if '429' in str(e) or '403' in str(e):
-            print(f"Failed with: {e}")
-            print('Sleeping 10 mins')
-            time.sleep(60*10)
-        else:
-            print(f"Sleeping for 5 minutes: {e}")
-            time.sleep(5*10)
-            continue
-
-
         
+        print('[Main] Sleeping 10 minutes')
+        time.sleep(10*60)
+        
+    except KeyboardInterrupt:
+        print("\n[Main] Shutting down...")
+        # Send poison pills to stop all workers
+        for _ in range(NUM_WORKERS):
+            offset_queue.put(None)
+        # Wait for workers to finish
+        for t in workers:
+            t.join()
+        print("[Main] All workers stopped")
+        break
+    except Exception as e:
+        print(f"[Main] Error: {e}")
+        time.sleep(5*60)
