@@ -9,6 +9,7 @@ sys.path.insert(0, f'{parent_dir}//libs')
 from mangadex_helper import MangaDexHelper
 from manga_factory import MangaFactory
 from sqlite_helper import SQLiteHelper
+from concurrent.futures import ThreadPoolExecutor, as_completed
 ##################################
 
 
@@ -24,6 +25,8 @@ while True:
         manga_objs = []
         offset = index*25
         manga_list = mangadex_helper.get_recent_manga(offset)
+        # Collect manga objects that need downloading, insert metadata synchronously
+        to_download = []
         for manga in manga_list:
             os.chdir(root_dir)
             print("Creating Manga Obj")
@@ -34,11 +37,22 @@ while True:
             if should_download:
                 print("Inserting into Database")
                 sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                to_download.append(manga_obj)
+            print("Queued (or skipped); sleeping briefly to avoid rate limits")
+            time.sleep(1)
 
-                print("Downloading Chapters")
-                mangadex_helper.download_chapters(manga_obj)
-            print("Sleeping 15 seconds")
-            time.sleep(15)
+        # Run downloads with up to 10 concurrent threads
+        if to_download:
+            print(f"Starting threaded downloads for {len(to_download)} manga(s) with up to 10 workers")
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_manga = {executor.submit(mangadex_helper.download_chapters, m): m for m in to_download}
+                for future in as_completed(future_to_manga):
+                    m = future_to_manga[future]
+                    try:
+                        result = future.result()
+                        print(f"Finished download task for {m.get_title()}")
+                    except Exception as e:
+                        print(f"Download task raised for {m.get_title()}: {e}")
         
         if swap:
             index = temp
