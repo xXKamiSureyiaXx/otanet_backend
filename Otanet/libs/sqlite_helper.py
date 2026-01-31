@@ -68,8 +68,8 @@ class SQLiteHelper:
         should_insert = self.should_insert()
 
         if should_insert:
-            insert_metadata_query = f"""INSERT INTO {table_name} (title, description, tags, hash, latest_chapter, time) 
-                VALUES (?,?,?,?,?,?);"""
+            insert_metadata_query = f"""INSERT INTO {table_name} (title, description, tags, hash, latest_chapter, cover_img, time) 
+                VALUES (?,?,?,?,?,?,?);"""
 
             insert_data = (
                     manga.get_title(), 
@@ -77,6 +77,7 @@ class SQLiteHelper:
                     str(manga.get_tags()),
                     manga.get_id(),
                     manga.get_latest_chapter(),
+                    manga.get_cover_img(),
                     datetime.now())
             
             if manga.get_latest_chapter() == 0:
@@ -99,6 +100,7 @@ class SQLiteHelper:
                 update_latest_chapter_query = f"""
                     UPDATE {table_name}
                     SET latest_chapter = {manga.get_latest_chapter()},
+                        cover_img = '{manga.get_cover_img()}',
                         time = '{datetime.now()}'
                     WHERE hash = '{manga.get_id()}';"""
                 try:
