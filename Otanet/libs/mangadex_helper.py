@@ -159,7 +159,7 @@ class MangaDexHelper:
             resp_json = chapter_resp.json()
             print("Response JSON: ", resp_json)
 
-            if('Rate Limit Exceeded' in string(resp_json)):
+            if('Rate Limit Exceeded' in str(resp_json)):
                 print("Rate Limited...Backing off for 2 minutes")
                 time.sleep(60 * 2)
                 continue
