@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 mangadex_helper = MangaDexHelper()
 sqlite_helper = SQLiteHelper()
-sqlite_helper.create_manga_metadata_table('manga_metadata')
+sqlite_helper.create_metadata_table('manga_metadata')
 
 root_dir = os.getcwd()
 swap = False
