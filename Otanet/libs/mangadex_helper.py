@@ -156,6 +156,7 @@ class MangaDexHelper:
         while retries <= 10:
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
             resp_json = chapter_resp.json()
+            print("Response JSON: ", resp_json)
             try:
                 host = resp_json["baseUrl"]
                 chapter_hash = resp_json["chapter"]["hash"]
