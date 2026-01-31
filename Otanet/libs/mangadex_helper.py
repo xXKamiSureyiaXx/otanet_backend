@@ -173,6 +173,11 @@ class MangaDexHelper:
                 print(f"Could not host, hash or data: {e}, attempt {retries}")
                 time.sleep(retries)
                 continue
+            
+        # Create table in main thread before starting worker threads
+        self.db.create_page_urls_table(manga_id)
+        
+                
         threads = []
         for page in data:
             dict = {

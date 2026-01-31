@@ -6,7 +6,7 @@ class SQLiteHelper:
     def __init__(self):
         self.s3_client = boto3.client('s3')
         self.bucket_name = 'otanet-manga-devo'
-        self.conn = sqlite3.connect('otanet_devo.db')
+        self.conn = sqlite3.connect('otanet_devo.db', check_same_thread=False)
         self.cursor = self.conn.cursor()
     
     def should_insert(self):
