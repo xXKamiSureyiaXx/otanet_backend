@@ -40,9 +40,11 @@ class SQLiteHelper:
         except sqlite3.Error as e:
             print(f"Error creating table {table_name}: {e}")
             self.conn.rollback()
-            
+
     def create_page_urls_table(self, manga_id):
         """Create a page URLs table for a specific manga using manga_id as the table name"""
+
+        manga_id = manga_id.replace("-", "_")  # SQLite table names cannot have hyphens
         try:
             create_table_query = f"""CREATE TABLE IF NOT EXISTS [{manga_id}] (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
