@@ -21,6 +21,26 @@ class SQLiteHelper:
 
         return should_insert
 
+    def create_metadata_table(self, table_name):
+        """Create the manga metadata table if it doesn't exist"""
+        try:
+            create_table_query = f"""CREATE TABLE IF NOT EXISTS {table_name} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    tags TEXT,
+                    hash TEXT UNIQUE NOT NULL,
+                    latest_chapter REAL,
+                    time DATETIME DEFAULT CURRENT_TIMESTAMP
+                );"""
+            with self._lock:
+                self.cursor.execute(create_table_query)
+                self.conn.commit()
+            print(f"Table {table_name} created or already exists")
+        except sqlite3.Error as e:
+            print(f"Error creating table {table_name}: {e}")
+            self.conn.rollback()
+            
     def create_page_urls_table(self, manga_id):
         """Create a page URLs table for a specific manga using manga_id as the table name"""
         try:
@@ -46,7 +66,7 @@ class SQLiteHelper:
         should_insert = self.should_insert()
 
         if should_insert:
-            insert_metadata_query = f"""                    INSERT INTO {table_name} (title, description, tags, hash, latest_chapter, time) 
+            insert_metadata_query = f"""INSERT INTO {table_name} (title, description, tags, hash, latest_chapter, time) 
                 VALUES (?,?,?,?,?,?);"""
 
             insert_data = (
