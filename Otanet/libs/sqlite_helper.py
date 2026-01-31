@@ -28,6 +28,7 @@ class SQLiteHelper:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
                     description TEXT,
+                    cover_img TEXT,
                     tags TEXT,
                     hash TEXT UNIQUE NOT NULL,
                     latest_chapter REAL,

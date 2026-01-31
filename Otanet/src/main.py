@@ -45,7 +45,7 @@ while True:
         # Run downloads with up to 10 concurrent threads
         if to_download:
             print(f"Starting threaded downloads for {len(to_download)} manga(s) with up to 10 workers")
-            with ThreadPoolExecutor(max_workers=10) as executor:
+            with ThreadPoolExecutor(max_workers=20) as executor:
                 future_to_manga = {executor.submit(mangadex_helper.download_chapters, m): m for m in to_download}
                 for future in as_completed(future_to_manga):
                     m = future_to_manga[future]
