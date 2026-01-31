@@ -61,12 +61,8 @@ class MangaDexHelper:
         return should_download
         
     def download_chapters(self, manga):  
-        limit = 0
         for chapter in manga.get_chapters():
             print(f"Request for {manga.get_id()}")
-            print(f"Starting download for index {limit}")
-            if limit > 50:
-                break
 
             # Making a folder to store the images in. Titles sometimes have 
             # symbols so those will be removed when creating directories
@@ -104,8 +100,7 @@ class MangaDexHelper:
             if did_download:
                 limit = limit + 1
                 print(limit)
-            '''
-            time.sleep(2)       
+            '''      
 
     def data_to_s3(self):
         print("Updating Database")
