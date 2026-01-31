@@ -3,6 +3,7 @@ import sys
 import time
 from queue import Queue
 from threading import Thread
+import random
 path = os.getcwd()
 parent_dir = os.path.abspath(os.path.join(path, os.pardir))
 ###### Import Player Object ######
@@ -21,6 +22,7 @@ def worker_thread(worker_id, offset_queue, root_dir):
     while True:
         try:
             offset = offset_queue.get()
+            time.sleep(random.uniform(1, 8.0))  # Stagger requests slightly
             if offset is None:  # Poison pill to stop thread
                 offset_queue.task_done()
                 break
@@ -45,7 +47,7 @@ def worker_thread(worker_id, offset_queue, root_dir):
                 sqlite_helper.data_to_s3()
                     
                 print(f"[Worker {worker_id}] Processed (or skipped); sleeping briefly")
-                time.sleep(1)
+                
             
             offset_queue.task_done()
             

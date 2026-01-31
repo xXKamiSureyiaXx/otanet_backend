@@ -8,6 +8,7 @@ import time
 import threading
 from utils import Utils
 from sqlite_helper import SQLiteHelper
+import random
 
 
 class MangaDexHelper:
@@ -62,7 +63,7 @@ class MangaDexHelper:
         
     def download_chapters(self, manga):  
         for chapter in manga.get_chapters():
-            time.sleep(3)
+            time.sleep(random.uniform(1, 10.0))  # Stagger chapter downloads
             print(f"Request for {manga.get_id()}")
 
             # Making a folder to store the images in. Titles sometimes have 

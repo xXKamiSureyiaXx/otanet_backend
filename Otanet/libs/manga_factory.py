@@ -2,6 +2,7 @@ from mangadex_helper import MangaDexHelper
 import pandas as pd
 import os
 from utils import Utils
+import random
 
 class MangaFactory:
     def __init__(self, params):
