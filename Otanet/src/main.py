@@ -12,12 +12,17 @@ from manga_factory import MangaFactory
 from sqlite_helper import SQLiteHelper
 ##################################
 
-def worker_thread(worker_id, offset_queue, mangadex_helper, sqlite_helper, root_dir):
+def worker_thread(worker_id, offset_queue, root_dir):
     """Each worker continuously processes manga from offset queue"""
+    # Each worker gets its own helper instances to avoid contention
+    mangadex_helper = MangaDexHelper()
+    sqlite_helper = SQLiteHelper()
+    
     while True:
         try:
             offset = offset_queue.get()
             if offset is None:  # Poison pill to stop thread
+                offset_queue.task_done()
                 break
                 
             print(f"[Worker {worker_id}] Processing offset {offset}")
@@ -25,7 +30,6 @@ def worker_thread(worker_id, offset_queue, mangadex_helper, sqlite_helper, root_
             manga_list = mangadex_helper.get_recent_manga(offset)
             
             for manga in manga_list:
-                os.chdir(root_dir)
                 print(f"[Worker {worker_id}] Creating Manga Obj")
                 manga_obj = MangaFactory(manga)
                 
@@ -54,10 +58,11 @@ def worker_thread(worker_id, offset_queue, mangadex_helper, sqlite_helper, root_
             offset_queue.task_done()
 
 # Main execution
-mangadex_helper = MangaDexHelper()
+root_dir = os.getcwd()
+
+# Initialize database table with a single instance
 sqlite_helper = SQLiteHelper()
 sqlite_helper.create_metadata_table('manga_metadata')
-root_dir = os.getcwd()
 
 # Create queue for work distribution
 offset_queue = Queue()
@@ -66,7 +71,7 @@ offset_queue = Queue()
 NUM_WORKERS = 10
 workers = []
 for i in range(NUM_WORKERS):
-    t = Thread(target=worker_thread, args=(i, offset_queue, mangadex_helper, sqlite_helper, root_dir))
+    t = Thread(target=worker_thread, args=(i, offset_queue, root_dir))
     t.daemon = True
     t.start()
     workers.append(t)
