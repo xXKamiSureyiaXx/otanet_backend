@@ -41,9 +41,8 @@ class SQLiteHelper:
                     latest_chapter REAL,
                     time DATETIME DEFAULT CURRENT_TIMESTAMP
                 );"""
-            with self._lock:
-                self.cursor.execute(create_table_query)
-                self.conn.commit()
+            self.cursor.execute(create_table_query)
+            self.conn.commit()
             print(f"Table {table_name} created or already exists")
         except sqlite3.Error as e:
             print(f"Error creating table {table_name}: {e}")
@@ -62,9 +61,8 @@ class SQLiteHelper:
                     page_url TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 );"""
-            with self._lock:
-                self.cursor.execute(create_table_query)
-                self.conn.commit()
+            self.cursor.execute(create_table_query)
+            self.conn.commit()
             print(f"Table [{manga_id}] created or already exists")
         except sqlite3.Error as e:
             print(f"Error creating table [{manga_id}]: {e}")
