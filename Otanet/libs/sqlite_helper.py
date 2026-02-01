@@ -151,13 +151,25 @@ class SQLiteHelper:
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 
-                insert_page_query = f"INSERT INTO [{manga_id}] (manga_name, chapter_num, page_number, page_url, timestamp) VALUES (?, ?, ?, ?, ?);"
+                insert_page_query = f"""INSERT INTO [{manga_id}] (manga_name, chapter_num, page_number, page_url, timestamp)
+                                            SELECT ?, ?, ?, ?, ?
+                                            WHERE NOT EXISTS (
+                                                SELECT 1 FROM [{manga_id}]
+                                                    WHERE manga_name = ? 
+                                                    AND chapter_num = ? 
+                                                    AND page_number = ? 
+                                                    AND page_url = ?
+                                            );"""
                 insert_data = (
                     str(manga_name), 
                     str(chapter_num), 
                     str(page_number), 
                     str(page_url), 
-                    datetime.now().isoformat()
+                    datetime.now().isoformat(),
+                    str(manga_name), 
+                    str(chapter_num), 
+                    str(page_number), 
+                    str(page_url), 
                 )
                 print(f"Query: {insert_page_query}, Data: {insert_data}")
                 cursor.execute(insert_page_query, insert_data)
