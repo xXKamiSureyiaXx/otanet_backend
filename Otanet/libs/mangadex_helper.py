@@ -53,24 +53,34 @@ class MangaDexHelper:
         return manga_list
     
     def set_latest_chapters(self, manga):
-        chapters = []
+        all_chapters = []
         offset = 0
         while True:
             response = requests.get(
                 f"{self.base_url}/manga/{manga.get_id()}/feed",
                     params={"translatedLanguage[]": self.languages, "offset": offset, "limit": 100},
                 )
-            
-            chapter_set = response.json().get("data", [])
-            chapters.append(response)
 
-            print(f"Fetched {len(chapter_set)} chapters for manga {manga.get_id()} at offset {offset}")
+            chapters = response.json().get("data", [])
+            all_chapters.extend(chapters)
 
-            if len(chapter_set) < 100:
+            print(f"Fetched {len(chapters)} chapters for manga {manga.get_id()} at offset {offset}")
+
+            if len(chapters) < 100:
                 break
-            offset += len(chapter_set)
+            offset += len(chapters)
 
-        manga.set_chapters(chapters) 
+
+        class MockResponse:
+            def __init__(self, data):
+                self._data = data
+
+            def json(self):
+                return {"data": self._data}
+
+        combined_response = MockResponse(all_chapters)
+        manga.set_chapters(combined_response)
+
         should_download = manga.set_latest_chapter()
         return should_download
         

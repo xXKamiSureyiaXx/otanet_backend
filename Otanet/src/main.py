@@ -77,7 +77,6 @@ for i in range(NUM_WORKERS):
     t = Thread(target=worker_thread, args=(i, offset_queue, root_dir))
     t.daemon = True
     t.start()
-    time.sleep(3) # Stagger thread starts
     workers.append(t)
 
 print(f"Started {NUM_WORKERS} worker threads")
