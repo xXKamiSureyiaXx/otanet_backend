@@ -68,7 +68,7 @@ class MangaDexHelper:
 
             if len(chapter_set) < 100:
                 break
-            offset = len(chapter_set)
+            offset += len(chapter_set)
 
         manga.set_chapters(chapters) 
         #should_download = manga.set_latest_chapter()
