@@ -53,12 +53,24 @@ class MangaDexHelper:
         return manga_list
     
     def set_latest_chapters(self, manga):
-        chapters = requests.get(
-            f"{self.base_url}/manga/{manga.get_id()}/feed",
-            params={"translatedLanguage[]": self.languages},
-        )
+        chapters = []
+        offset = 0
+        while True:
+            response = requests.get(
+                f"{self.base_url}/manga/{manga.get_id()}/feed",
+                    params={"translatedLanguage[]": self.languages, "offset": offset, "limit": 100},
+                )
+            
+            chapter_set = response.json().get("data", [])
+            chapters.append(chapter_set)
+
+            if len(chapter_set) < 100:
+                break
+            offset = len(chapter_set)
+
         manga.set_chapters(chapters) 
-        should_download = manga.set_latest_chapter()
+        #should_download = manga.set_latest_chapter()
+        should_download = True
         return should_download
         
     def download_chapters(self, manga):  
