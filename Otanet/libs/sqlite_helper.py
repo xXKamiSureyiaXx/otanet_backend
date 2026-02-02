@@ -58,13 +58,133 @@ class SQLiteHelper:
                     chapter_num TEXT NOT NULL,
                     page_number TEXT NOT NULL,
                     page_url TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(chapter_num, page_number)
                 );"""
             cursor.execute(create_table_query)
             conn.close()
             print(f"Table [{manga_id}] created or already exists")
         except sqlite3.Error as e:
             print(f"Error creating table [{manga_id}]: {e}")
+
+    def get_manga_latest_chapter(self, table_name, manga_hash):
+        """
+        OPTIMIZATION: Get the latest chapter number for a manga from the database
+        Returns None if manga doesn't exist
+        """
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                
+                query = f"SELECT latest_chapter FROM {table_name} WHERE hash = ?"
+                cursor.execute(query, (manga_hash,))
+                result = cursor.fetchone()
+                
+                conn.close()
+                
+                if result:
+                    return float(result[0]) if result[0] else None
+                return None
+                
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    print(f"Database locked, retrying... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(0.1 * (attempt + 1))
+                    continue
+                else:
+                    print(f"Error getting manga latest chapter: {e}")
+                    return None
+            except sqlite3.Error as e:
+                print(f"Error getting manga latest chapter: {e}")
+                return None
+
+    def get_existing_chapters(self, manga_id):
+        """
+        OPTIMIZATION: Get a set of chapter numbers that already exist in the database
+        Returns empty set if table doesn't exist
+        """
+        manga_id_normalized = manga_id.replace("-", "_")
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                
+                # Check if table exists
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name=?
+                """, (manga_id_normalized,))
+                
+                if not cursor.fetchone():
+                    conn.close()
+                    return set()
+                
+                # Get distinct chapter numbers
+                query = f"SELECT DISTINCT chapter_num FROM [{manga_id_normalized}]"
+                cursor.execute(query)
+                chapters = {row[0] for row in cursor.fetchall()}
+                
+                conn.close()
+                return chapters
+                
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    print(f"Database locked, retrying... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(0.1 * (attempt + 1))
+                    continue
+                else:
+                    print(f"Error getting existing chapters: {e}")
+                    return set()
+            except sqlite3.Error as e:
+                print(f"Error getting existing chapters: {e}")
+                return set()
+
+    def chapter_pages_exist(self, manga_id, chapter_num):
+        """
+        OPTIMIZATION: Check if a specific chapter already has pages in the database
+        Returns True if at least one page exists for this chapter
+        """
+        manga_id_normalized = manga_id.replace("-", "_")
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                
+                # Check if table exists
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name=?
+                """, (manga_id_normalized,))
+                
+                if not cursor.fetchone():
+                    conn.close()
+                    return False
+                
+                # Check if chapter has any pages
+                query = f"SELECT COUNT(*) FROM [{manga_id_normalized}] WHERE chapter_num = ?"
+                cursor.execute(query, (str(chapter_num),))
+                count = cursor.fetchone()[0]
+                
+                conn.close()
+                return count > 0
+                
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    print(f"Database locked, retrying... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(0.1 * (attempt + 1))
+                    continue
+                else:
+                    print(f"Error checking if chapter pages exist: {e}")
+                    return False
+            except sqlite3.Error as e:
+                print(f"Error checking if chapter pages exist: {e}")
+                return False
 
     def insert_manga_metadata(self, table_name, manga):
         max_retries = 3
@@ -151,29 +271,25 @@ class SQLiteHelper:
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 
-                insert_page_query = f"""INSERT INTO [{manga_id}] (manga_name, chapter_num, page_number, page_url, timestamp)
-                                            SELECT ?, ?, ?, ?, ?
-                                            WHERE NOT EXISTS (
-                                                SELECT 1 FROM [{manga_id}]
-                                                    WHERE manga_name = ? 
-                                                    AND chapter_num = ? 
-                                                    AND page_number = ? 
-                                                    AND page_url = ?
-                                            );"""
+                # Simplified insert with UNIQUE constraint handling
+                insert_page_query = f"""INSERT OR IGNORE INTO [{manga_id}] 
+                    (manga_name, chapter_num, page_number, page_url, timestamp)
+                    VALUES (?, ?, ?, ?, ?);"""
+                    
                 insert_data = (
                     str(manga_name), 
                     str(chapter_num), 
                     str(page_number), 
                     str(page_url), 
-                    datetime.now().isoformat(),
-                    str(manga_name), 
-                    str(chapter_num), 
-                    str(page_number), 
-                    str(page_url), 
+                    datetime.now().isoformat()
                 )
-                print(f"Query: {insert_page_query}, Data: {insert_data}")
+                
                 cursor.execute(insert_page_query, insert_data)
-                print(f"Page URL stored successfully in table [{manga_id}]: {manga_name} - Chapter {chapter_num} - Page {page_number}")
+                
+                if cursor.rowcount > 0:
+                    print(f"Page URL stored successfully in table [{manga_id}]: {manga_name} - Chapter {chapter_num} - Page {page_number}")
+                else:
+                    print(f"Page URL already exists in table [{manga_id}]: {manga_name} - Chapter {chapter_num} - Page {page_number}")
                 
                 conn.close()
                 break

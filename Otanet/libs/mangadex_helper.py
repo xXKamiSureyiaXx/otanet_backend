@@ -53,13 +53,22 @@ class MangaDexHelper:
         return manga_list
     
     def set_latest_chapters(self, manga):
+        """
+        OPTIMIZATION: Check if manga exists in database first
+        If it exists and has chapters, only fetch new chapters
+        """
+        # Check if manga exists and get its latest chapter from DB
+        existing_chapter = self.db.get_manga_latest_chapter('manga_metadata', manga.get_id())
+        
         all_chapters = []
         offset = 0
+        
+        # Fetch all chapters (we need to know the absolute latest)
         while True:
             response = requests.get(
                 f"{self.base_url}/manga/{manga.get_id()}/feed",
-                    params={"translatedLanguage[]": self.languages, "offset": offset, "limit": 100},
-                )
+                params={"translatedLanguage[]": self.languages, "offset": offset, "limit": 100},
+            )
 
             chapters = response.json().get("data", [])
             all_chapters.extend(chapters)
@@ -70,6 +79,9 @@ class MangaDexHelper:
                 break
             offset += len(chapters)
 
+        if not all_chapters:
+            print(f"No chapters found for manga {manga.get_id()}")
+            return False
 
         class MockResponse:
             def __init__(self, data):
@@ -82,51 +94,48 @@ class MangaDexHelper:
         manga.set_chapters(combined_response)
 
         should_download = manga.set_latest_chapter()
+        
+        # OPTIMIZATION: Only download if there are new chapters
+        if existing_chapter is not None:
+            if manga.get_latest_chapter() <= existing_chapter:
+                print(f"No new chapters for manga {manga.get_id()} (Latest: {manga.get_latest_chapter()}, DB: {existing_chapter})")
+                return False
+            else:
+                print(f"New chapters available for manga {manga.get_id()} (Latest: {manga.get_latest_chapter()}, DB: {existing_chapter})")
+        
         return should_download
         
-    def download_chapters(self, manga):  
+    def download_chapters(self, manga):
+        """
+        OPTIMIZATION: Check which chapters already exist in the database
+        before attempting to download
+        """
+        # Get list of chapters that already exist in the database
+        existing_chapters = self.db.get_existing_chapters(manga.get_id())
+        print(f"Found {len(existing_chapters)} existing chapters in database for manga {manga.get_id()}")
+        
         for chapter in manga.get_chapters():
-            time.sleep(random.uniform(5, 20.0))  # Stagger chapter downloads
-            print(f"Request for {manga.get_id()}")
-
-            # Making a folder to store the images in. Titles sometimes have 
-            # symbols so those will be removed when creating directories
-            title = self.utils.normalize_s3_text(manga.get_title())
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
+            
+            # OPTIMIZATION: Skip if chapter already exists in database
+            if chapter_num in existing_chapters:
+                print(f"Chapter {chapter_num} already exists in database for {manga.get_id()}, skipping...")
+                continue
+            
+            time.sleep(random.uniform(5, 20.0))  # Stagger chapter downloads
+            print(f"Request for {manga.get_id()} chapter {chapter_num}")
+
+            title = self.utils.normalize_s3_text(manga.get_title())
             chapter_path = f"{manga.get_id()}/chapter_{chapter_num}"
             base_key = f"{title}/chapter_{chapter_num}"
-
-            '''
-            if chapter != manga.get_chapters()[-1]:
-                s3_dir = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=f"{base_key}/", MaxKeys=1)
-                if s3_dir['KeyCount'] > 0:       
-                    print(f"Chapter Exists...Skipping: {base_key}")
-                    continue
-                else:
-                    print("Chapter does not Exist...Continuing")
-            '''
             
-            '''
-            self.utils.create_tmp_dir(chapter_path)
-            print("Dowloading Cover")
-            self.download_cover(chapter_path, title, manga.get_cover_img())
-            '''
             print("Storing Page URLs to Database")
             self.store_page_url_to_database(chapter['id'], title, chapter_num, manga.get_id())
-            '''
-            print("Downloading Chapters")
-            did_download = self.download_pages(chapter_path, chapter['id'], title, chapter_num, self.get_bucket_keys(base_key))
-            self.utils.clear_chapter_dir(chapter_path)
-            '''
+            
             os.chdir(self.root_directory)
 
-            '''
-            if did_download:
-                limit = limit + 1
-                print(limit)
-            '''      
-
     def data_to_s3(self):
+        """Upload database to S3 - only call this periodically, not after every manga"""
         print("Updating Database")
         self.s3_client.upload_file(f"otanet_devo.db", self.bucket_name, "database/otanet_devo.db")
 
@@ -146,8 +155,8 @@ class MangaDexHelper:
 
             dict = {
                     'id': manga['data']['id'],
-                    'title': self.utils(manga["data"]["attributes"]["title"]["en"]),
-                    'description': self.utils(manga["data"]["attributes"]["description"]["en"]),
+                    'title': self.utils.normalize_database_text(manga["data"]["attributes"]["title"]["en"]),
+                    'description': self.utils.normalize_database_text(manga["data"]["attributes"]["description"]["en"]),
                     'cover_img': f"https://uploads.mangadex.org/covers/{manga['data']['id']}/{cover_id}",
                     'tags': tags
                 }
@@ -175,34 +184,48 @@ class MangaDexHelper:
                 print(f"Failed to remove {path}/title directory")
     
     def store_page_url_to_database(self, chapter_id, title, chapter_num, manga_id):
-        print("Storing Page URLs to Database")
+        """
+        OPTIMIZATION: Check if pages already exist before making API call
+        """
+        print("Checking if chapter pages already exist in database...")
+        
+        # Check if this chapter already has pages in the database
+        if self.db.chapter_pages_exist(manga_id, chapter_num):
+            print(f"Chapter {chapter_num} pages already exist in database, skipping API call")
+            return
+        
+        print("Fetching page URLs from MangaDex API...")
 
         retries = 0
         while retries <= 10:
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
             resp_json = chapter_resp.json()
-            print("Response JSON: ", resp_json)
 
-            if('Rate Limit Exceeded' in str(resp_json)):
+            if 'Rate Limit Exceeded' in str(resp_json):
                 print("Rate Limited...Backing off for 2 minutes")
                 time.sleep(60 * 2)
+                retries += 1
                 continue
+            
             try:
                 host = resp_json["baseUrl"]
                 chapter_hash = resp_json["chapter"]["hash"]
                 data = resp_json["chapter"]["data"]
-                print("Recieved Response")
+                print("Received Response")
                 break
             except Exception as e:
                 retries = retries + 1
-                print(f"Could not host, hash or data: {e}, attempt {retries}")
-                time.sleep(retries)
+                print(f"Could not get host, hash or data: {e}, attempt {retries}")
+                time.sleep(retries * 2)
                 continue
+        
+        if retries > 10:
+            print(f"Failed to fetch chapter data after {retries} attempts")
+            return
             
         # Create table in main thread before starting worker threads
         self.db.create_page_urls_table(manga_id)
         
-                
         threads = []
         for page in data:
             dict = {
@@ -212,88 +235,13 @@ class MangaDexHelper:
                 'title': title,
                 'chapter_num': chapter_num,
                 'manga_id': manga_id
-                }
+            }
             thread = threading.Thread(target=self.threaded_store_page_url, args=(dict, title, chapter_num, manga_id))
             threads.append(thread)
             thread.start()
     
         for thread in threads:
             thread.join()
-            
-    
-    def download_pages(self, chapter_path, chapter_id, title, chapter_num, keys):
-        print("Starting Download for Pages")
-        downloaded = False
-
-        retries = 0
-        while retries <= 10:
-            chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
-            resp_json = chapter_resp.json()
-            try:
-                host = resp_json["baseUrl"]
-                chapter_hash = resp_json["chapter"]["hash"]
-                data = resp_json["chapter"]["data"]
-                print("Recieved Response")
-                break
-            except Exception as e:
-                retries = retries + 1
-                print(f"Could not host, hash or data: {e}, attempt {retries}")
-                time.sleep(retries)
-                continue
-            
-        threads = []
-        for page in data:
-            print("Processing Data")
-            s3_obj_key = f"{title}/chapter_{chapter_num}/{page}"
-            if self.utils.get_first_number(page) in keys:
-                print(f"Skipping page {self.utils.get_first_number(page)}")
-                downloaded = False
-                continue
-            downloaded = True
-
-            dict = {
-                'hash': chapter_hash,
-                'host': host,
-                'key': s3_obj_key,
-                'page': page
-            }
-            path = f"{chapter_path}/{page}"
-            print(path)
-            print("Starting Threads")
-            thread = threading.Thread(target=self.threaded_download, args=(dict,path,))
-            threads.append(thread)
-            thread.start()
-            time.sleep(0.1)
-
-        for thread in threads:
-            thread.join()
-
-        return downloaded
-    
-    def threaded_download(self, dict, path):
-        thread_id = threading.get_ident()
-        print(f"Thread ID: {thread_id}")
-        content = requests.get(f"{dict['host']}/data/{dict['hash']}/{dict['page']}")
-        tries = 0
-        while tries < 20:
-            try:
-                with open(path, mode="wb") as f:
-                    f.write(content.content)
-                    self.s3_client.upload_file(path, self.bucket_name, dict['key'], ExtraArgs={'ContentType': "image/png"})
-                    break
-            except Exception as e:
-                print(f"Failed to upload: {e}, attempt {tries}")
-                self.utils.clear_chapter_dir(path)
-                tries = tries + 1
-                time.sleep(tries)
-                continue
-            try:
-                self.utils.clear_chapter_dir(path)
-                break
-            except Exception as e:
-                print(f"Failed to remove {path}: {e}")
-                tries = tries + 1
-                continue
 
     def threaded_store_page_url(self, dict, title, chapter_num, manga_id):
         thread_id = threading.get_ident()
@@ -317,7 +265,6 @@ class MangaDexHelper:
             print(f"Stored page URL for {title} chapter {chapter_num} page {page_number}")
         except Exception as e:
             print(f"Failed to store page URL to database: {e}")
-            
     
     def get_bucket_keys(self, base_key):
         keys = []
