@@ -62,7 +62,7 @@ class MangaDexHelper:
                 )
             
             chapter_set = response.json().get("data", [])
-            chapters.append(chapter_set)
+            chapters.append(response)
 
             print(f"Fetched {len(chapter_set)} chapters for manga {manga.get_id()} at offset {offset}")
 
