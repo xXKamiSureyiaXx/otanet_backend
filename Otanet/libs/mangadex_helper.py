@@ -64,6 +64,8 @@ class MangaDexHelper:
             chapter_set = response.json().get("data", [])
             chapters.append(chapter_set)
 
+            print(f"Fetched {len(chapter_set)} chapters for manga {manga.get_id()} at offset {offset}")
+
             if len(chapter_set) < 100:
                 break
             offset = len(chapter_set)
