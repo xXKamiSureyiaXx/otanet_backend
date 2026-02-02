@@ -8,6 +8,7 @@ import time
 import threading
 from utils import Utils
 from sqlite_helper import SQLiteHelper
+from metrics_collector import MetricsCollector
 import random
 
 
@@ -18,6 +19,7 @@ class MangaDexHelper:
         self.bucket = self.s3_resource.Bucket('otanet-manga-devo')
         self.utils = Utils()
         self.db = SQLiteHelper()
+        self.metrics = MetricsCollector()
         self.bucket_name = 'otanet-manga-devo'
         self.base_url = "https://api.mangadex.org"
         self.pagnation_limit = 25
@@ -30,6 +32,8 @@ class MangaDexHelper:
             params={"limit": self.pagnation_limit,
                     "offset": offset}
         )
+        
+        self.metrics.record_api_call('manga_list')
 
         manga_list = []
         for manga in base_response.json()["data"]:
@@ -69,6 +73,8 @@ class MangaDexHelper:
                 f"{self.base_url}/manga/{manga.get_id()}/feed",
                 params={"translatedLanguage[]": self.languages, "offset": offset, "limit": 100},
             )
+            
+            self.metrics.record_api_call('chapter_feed')
 
             chapters = response.json().get("data", [])
             all_chapters.extend(chapters)
@@ -114,11 +120,15 @@ class MangaDexHelper:
         existing_chapters_status = self.db.get_chapters_with_status(manga.get_id())
         print(f"Found {len(existing_chapters_status)} existing chapters in database for manga {manga.get_id()}")
         
+        worker_id = threading.current_thread().name.split('-')[0] if '-' in threading.current_thread().name else 0
+        
         for chapter in manga.get_chapters():
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
             
             # Check if this chapter has any existing pages
             existing_pages = set()
+            is_new_chapter = chapter_num not in existing_chapters_status
+            
             if chapter_num in existing_chapters_status:
                 existing_pages = existing_chapters_status[chapter_num]['pages']
                 print(f"Chapter {chapter_num} has {len(existing_pages)} existing pages in database")
@@ -132,13 +142,30 @@ class MangaDexHelper:
             
             print("Storing Page URLs to Database (only missing pages)")
             # Pass existing pages so we only store new ones
-            self.store_page_url_to_database(
+            pages_info = self.store_page_url_to_database(
                 chapter['id'], 
                 title, 
                 chapter_num, 
                 manga.get_id(), 
                 existing_pages
             )
+            
+            # Record chapter metrics
+            if pages_info:
+                is_complete = pages_info['downloaded'] == 0  # Complete if no pages downloaded
+                self.metrics.record_chapter(
+                    worker_id=worker_id,
+                    is_new=is_new_chapter,
+                    is_complete=is_complete,
+                    total_pages=pages_info['total'],
+                    downloaded_pages=pages_info['downloaded']
+                )
+                
+                self.metrics.record_pages(
+                    total=pages_info['total'],
+                    downloaded=pages_info['downloaded'],
+                    skipped=pages_info['skipped']
+                )
             
             os.chdir(self.root_directory)
 
@@ -152,6 +179,8 @@ class MangaDexHelper:
             f"{self.base_url}/manga/{manga_id}",
                 params={"translatedLanguage[]": self.languages},
             ).json()
+        
+        self.metrics.record_api_call('manga_list')
         
         try:
             manga_relationships = next((obj for obj in manga['data']["relationships"] if obj["type"] == "cover_art"), False)
@@ -171,9 +200,11 @@ class MangaDexHelper:
             return dict
         except Exception as e:
             print(f"Manga not Found: {e}")
+            self.metrics.record_error('api_errors')
         
     def get_manga_cover_id(self, manga_relationships):
         cover_response = requests.get(f"{self.base_url}/cover/{manga_relationships['id']}")
+        self.metrics.record_api_call('cover_art')
         return cover_response.json()["data"]["attributes"]["fileName"]
     
     def download_cover(self, path, title, cover):
@@ -201,6 +232,9 @@ class MangaDexHelper:
             chapter_num: Chapter number
             manga_id: Manga ID
             existing_pages: Set of page numbers already in database (optional)
+            
+        Returns:
+            dict with 'total', 'downloaded', 'skipped' page counts
         """
         if existing_pages is None:
             existing_pages = set()
@@ -213,16 +247,19 @@ class MangaDexHelper:
         data = None
         
         while retries <= 10:
-            chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
-            resp_json = chapter_resp.json()
-
-            if 'Rate Limit Exceeded' in str(resp_json):
-                print("Rate Limited...Backing off for 2 minutes")
-                time.sleep(60 * 2)
-                retries += 1
-                continue
-            
             try:
+                chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
+                resp_json = chapter_resp.json()
+                
+                self.metrics.record_api_call('page_urls')
+
+                if 'Rate Limit Exceeded' in str(resp_json):
+                    print("Rate Limited...Backing off for 2 minutes")
+                    self.metrics.record_error('rate_limits')
+                    time.sleep(60 * 2)
+                    retries += 1
+                    continue
+                
                 host = resp_json["baseUrl"]
                 chapter_hash = resp_json["chapter"]["hash"]
                 data = resp_json["chapter"]["data"]
@@ -231,12 +268,13 @@ class MangaDexHelper:
             except Exception as e:
                 retries = retries + 1
                 print(f"Could not get host, hash or data: {e}, attempt {retries}")
+                self.metrics.record_error('api_errors')
                 time.sleep(retries * 2)
                 continue
         
         if retries > 10 or data is None:
             print(f"Failed to fetch chapter data after {retries} attempts")
-            return
+            return None
         
         # Count total pages and missing pages
         total_pages = len(data)
@@ -250,7 +288,11 @@ class MangaDexHelper:
         
         if len(missing_pages) == 0:
             print(f"Chapter {chapter_num} is complete with all {total_pages} pages, skipping...")
-            return
+            return {
+                'total': total_pages,
+                'downloaded': 0,
+                'skipped': total_pages
+            }
         
         print(f"Chapter {chapter_num}: {len(existing_pages)}/{total_pages} pages exist, downloading {len(missing_pages)} missing pages")
             
@@ -276,6 +318,12 @@ class MangaDexHelper:
             thread.join()
         
         print(f"Completed storing {len(missing_pages)} missing pages for chapter {chapter_num}")
+        
+        return {
+            'total': total_pages,
+            'downloaded': len(missing_pages),
+            'skipped': len(existing_pages)
+        }
 
     def threaded_store_page_url(self, dict, title, chapter_num, manga_id):
         thread_id = threading.get_ident()
@@ -299,6 +347,8 @@ class MangaDexHelper:
             print(f"Stored page URL for {title} chapter {chapter_num} page {page_number}")
         except Exception as e:
             print(f"Failed to store page URL to database: {e}")
+            self.metrics.record_page_failure()
+            self.metrics.record_error('db_errors')
     
     def get_bucket_keys(self, base_key):
         keys = []

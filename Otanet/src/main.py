@@ -8,11 +8,13 @@ import random
 path = os.getcwd()
 parent_dir = os.path.abspath(os.path.join(path, os.pardir))
 
-###### Import Player Object ######
+###### Import Libraries ######
 sys.path.insert(0, f'{parent_dir}//libs')
 from mangadex_helper import MangaDexHelper
 from manga_factory import MangaFactory
 from sqlite_helper import SQLiteHelper
+from metrics_collector import MetricsCollector
+from dashboard import run_dashboard
 ##################################
 
 def worker_thread(worker_id, offset_queue, root_dir, s3_upload_queue):
@@ -20,6 +22,7 @@ def worker_thread(worker_id, offset_queue, root_dir, s3_upload_queue):
     # Each worker gets its own helper instances to avoid contention
     mangadex_helper = MangaDexHelper()
     sqlite_helper = SQLiteHelper()
+    metrics = MetricsCollector()
     
     while True:
         try:
@@ -32,37 +35,64 @@ def worker_thread(worker_id, offset_queue, root_dir, s3_upload_queue):
                 
             print(f"[Worker {worker_id}] Processing offset {offset}")
             
-            manga_list = mangadex_helper.get_recent_manga(offset)
+            try:
+                manga_list = mangadex_helper.get_recent_manga(offset)
+                metrics.record_api_call('manga_list')
+            except Exception as e:
+                metrics.record_error('api_errors')
+                print(f"[Worker {worker_id}] Error fetching manga list: {e}")
+                offset_queue.task_done()
+                continue
             
             for manga in manga_list:
-                print(f"[Worker {worker_id}] Creating Manga Obj for {manga['title']}")
-                manga_obj = MangaFactory(manga)
-                
-                print(f"[Worker {worker_id}] Setting Latest Chapter")
-                should_download = mangadex_helper.set_latest_chapters(manga_obj)
-                
-                if should_download:
-                    print(f"[Worker {worker_id}] Inserting into Database")
-                    sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                try:
+                    print(f"[Worker {worker_id}] Creating Manga Obj for {manga['title']}")
+                    manga_obj = MangaFactory(manga)
                     
-                    print(f"[Worker {worker_id}] Downloading chapters for {manga_obj.get_title()}")
-                    mangadex_helper.download_chapters(manga_obj)
+                    # Check if this is new manga
+                    existing_chapter = sqlite_helper.get_manga_latest_chapter('manga_metadata', manga_obj.get_id())
+                    is_new_manga = existing_chapter is None
                     
-                    # Signal that S3 upload should happen
-                    s3_upload_queue.put(True)
-                else:
-                    print(f"[Worker {worker_id}] No new chapters for {manga_obj.get_title()}, skipping download")
+                    print(f"[Worker {worker_id}] Setting Latest Chapter")
+                    should_download = mangadex_helper.set_latest_chapters(manga_obj)
                     
-                print(f"[Worker {worker_id}] Processed (or skipped); sleeping briefly")
+                    # Record manga processing
+                    metrics.record_manga_processed(
+                        worker_id=worker_id,
+                        manga_title=manga_obj.get_title(),
+                        is_new=is_new_manga,
+                        has_new_chapters=should_download
+                    )
+                    
+                    if should_download:
+                        print(f"[Worker {worker_id}] Inserting into Database")
+                        sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                        
+                        print(f"[Worker {worker_id}] Downloading chapters for {manga_obj.get_title()}")
+                        mangadex_helper.download_chapters(manga_obj)
+                        
+                        # Signal that S3 upload should happen
+                        s3_upload_queue.put(True)
+                    else:
+                        print(f"[Worker {worker_id}] No new chapters for {manga_obj.get_title()}, skipping download")
+                        
+                    print(f"[Worker {worker_id}] Processed (or skipped); sleeping briefly")
+                    
+                except Exception as e:
+                    metrics.record_error('api_errors')
+                    print(f"[Worker {worker_id}] Error processing manga: {e}")
+                    continue
             
             offset_queue.task_done()
             
         except Exception as e:
             if '429' in str(e) or '403' in str(e):
                 print(f"[Worker {worker_id}] Rate limited: {e}")
+                metrics.record_error('rate_limits')
                 time.sleep(60)  # Back off for a minute
             else:
                 print(f"[Worker {worker_id}] Error: {e}")
+                metrics.record_error('api_errors')
                 time.sleep(5)
             offset_queue.task_done()
 
@@ -72,6 +102,7 @@ def s3_upload_thread(s3_upload_queue):
     Upload every 5 minutes or after 10 manga processed
     """
     sqlite_helper = SQLiteHelper()
+    metrics = MetricsCollector()
     upload_count = 0
     last_upload_time = time.time()
     
@@ -90,9 +121,14 @@ def s3_upload_thread(s3_upload_queue):
             # Upload if: 10 manga processed OR 5 minutes passed
             if upload_count >= 10 or time_elapsed >= 300:
                 print(f"[S3 Upload] Uploading database (count: {upload_count}, time elapsed: {time_elapsed:.0f}s)")
-                sqlite_helper.data_to_s3()
-                upload_count = 0
-                last_upload_time = current_time
+                try:
+                    sqlite_helper.data_to_s3()
+                    metrics.record_s3_upload()
+                    upload_count = 0
+                    last_upload_time = current_time
+                except Exception as e:
+                    print(f"[S3 Upload] Error: {e}")
+                    metrics.record_error('api_errors')
                 
         except Exception as e:
             print(f"[S3 Upload] Error: {e}")
@@ -100,6 +136,14 @@ def s3_upload_thread(s3_upload_queue):
 
 # Main execution
 root_dir = os.getcwd()
+
+# Initialize metrics and dashboard
+print("Initializing metrics collector...")
+metrics = MetricsCollector()
+
+print("Starting dashboard server...")
+run_dashboard(host='0.0.0.0', port=5000)
+print("Dashboard available at http://localhost:5000")
 
 # Initialize database table with a single instance
 sqlite_helper = SQLiteHelper()
@@ -128,6 +172,14 @@ print(f"Started {NUM_WORKERS} worker threads")
 # Main loop: continuously add offsets to the queue
 cycle_offset = 0
 MAX_OFFSET = 300  # Cycle back after reaching this offset
+
+print("\n" + "="*60)
+print("MangaDex Scraper Started Successfully!")
+print("="*60)
+print(f"Dashboard: http://localhost:5000")
+print(f"Workers: {NUM_WORKERS}")
+print(f"Offset Range: 0-{MAX_OFFSET}")
+print("="*60 + "\n")
 
 while True:
     try:
@@ -161,9 +213,14 @@ while True:
         for t in workers:
             t.join()
         
+        # Shutdown metrics
+        metrics.shutdown()
+        
         print("[Main] All workers stopped")
+        print("[Main] Shutdown complete")
         break
         
     except Exception as e:
         print(f"[Main] Error: {e}")
+        metrics.record_error('api_errors')
         time.sleep(5*60)
