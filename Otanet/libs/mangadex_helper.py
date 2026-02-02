@@ -107,20 +107,21 @@ class MangaDexHelper:
         
     def download_chapters(self, manga):
         """
-        OPTIMIZATION: Check which chapters already exist in the database
-        before attempting to download
+        IMPROVED: Check which pages are missing from each chapter
+        Download only missing pages instead of skipping entire chapters
         """
-        # Get list of chapters that already exist in the database
-        existing_chapters = self.db.get_existing_chapters(manga.get_id())
-        print(f"Found {len(existing_chapters)} existing chapters in database for manga {manga.get_id()}")
+        # Get existing chapter pages from database
+        existing_chapters_status = self.db.get_chapters_with_status(manga.get_id())
+        print(f"Found {len(existing_chapters_status)} existing chapters in database for manga {manga.get_id()}")
         
         for chapter in manga.get_chapters():
             chapter_num = chapter["attributes"]["chapter"].replace('.', '_')
             
-            # OPTIMIZATION: Skip if chapter already exists in database
-            if chapter_num in existing_chapters:
-                print(f"Chapter {chapter_num} already exists in database for {manga.get_id()}, skipping...")
-                continue
+            # Check if this chapter has any existing pages
+            existing_pages = set()
+            if chapter_num in existing_chapters_status:
+                existing_pages = existing_chapters_status[chapter_num]['pages']
+                print(f"Chapter {chapter_num} has {len(existing_pages)} existing pages in database")
             
             time.sleep(random.uniform(5, 20.0))  # Stagger chapter downloads
             print(f"Request for {manga.get_id()} chapter {chapter_num}")
@@ -129,8 +130,15 @@ class MangaDexHelper:
             chapter_path = f"{manga.get_id()}/chapter_{chapter_num}"
             base_key = f"{title}/chapter_{chapter_num}"
             
-            print("Storing Page URLs to Database")
-            self.store_page_url_to_database(chapter['id'], title, chapter_num, manga.get_id())
+            print("Storing Page URLs to Database (only missing pages)")
+            # Pass existing pages so we only store new ones
+            self.store_page_url_to_database(
+                chapter['id'], 
+                title, 
+                chapter_num, 
+                manga.get_id(), 
+                existing_pages
+            )
             
             os.chdir(self.root_directory)
 
@@ -183,20 +191,27 @@ class MangaDexHelper:
             except:
                 print(f"Failed to remove {path}/title directory")
     
-    def store_page_url_to_database(self, chapter_id, title, chapter_num, manga_id):
+    def store_page_url_to_database(self, chapter_id, title, chapter_num, manga_id, existing_pages=None):
         """
-        OPTIMIZATION: Check if pages already exist before making API call
+        IMPROVED: Only fetch and store pages that aren't already in the database
+        
+        Args:
+            chapter_id: MangaDex chapter ID
+            title: Manga title
+            chapter_num: Chapter number
+            manga_id: Manga ID
+            existing_pages: Set of page numbers already in database (optional)
         """
-        print("Checking if chapter pages already exist in database...")
+        if existing_pages is None:
+            existing_pages = set()
         
-        # Check if this chapter already has pages in the database
-        if self.db.chapter_pages_exist(manga_id, chapter_num):
-            print(f"Chapter {chapter_num} pages already exist in database, skipping API call")
-            return
-        
-        print("Fetching page URLs from MangaDex API...")
+        print(f"Fetching page URLs from MangaDex API for chapter {chapter_num}...")
 
         retries = 0
+        host = None
+        chapter_hash = None
+        data = None
+        
         while retries <= 10:
             chapter_resp = requests.get(f"{self.base_url}/at-home/server/{chapter_id}")
             resp_json = chapter_resp.json()
@@ -219,15 +234,32 @@ class MangaDexHelper:
                 time.sleep(retries * 2)
                 continue
         
-        if retries > 10:
+        if retries > 10 or data is None:
             print(f"Failed to fetch chapter data after {retries} attempts")
             return
+        
+        # Count total pages and missing pages
+        total_pages = len(data)
+        
+        # Determine which pages are missing
+        missing_pages = []
+        for page in data:
+            page_number = str(self.utils.get_first_number(page))
+            if page_number not in existing_pages:
+                missing_pages.append(page)
+        
+        if len(missing_pages) == 0:
+            print(f"Chapter {chapter_num} is complete with all {total_pages} pages, skipping...")
+            return
+        
+        print(f"Chapter {chapter_num}: {len(existing_pages)}/{total_pages} pages exist, downloading {len(missing_pages)} missing pages")
             
         # Create table in main thread before starting worker threads
         self.db.create_page_urls_table(manga_id)
         
+        # Only process missing pages
         threads = []
-        for page in data:
+        for page in missing_pages:
             dict = {
                 'hash': chapter_hash,
                 'host': host,
@@ -242,6 +274,8 @@ class MangaDexHelper:
     
         for thread in threads:
             thread.join()
+        
+        print(f"Completed storing {len(missing_pages)} missing pages for chapter {chapter_num}")
 
     def threaded_store_page_url(self, dict, title, chapter_num, manga_id):
         thread_id = threading.get_ident()

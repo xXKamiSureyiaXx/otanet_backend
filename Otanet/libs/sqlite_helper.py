@@ -100,10 +100,11 @@ class SQLiteHelper:
                 print(f"Error getting manga latest chapter: {e}")
                 return None
 
-    def get_existing_chapters(self, manga_id):
+    def get_existing_chapter_pages(self, manga_id, chapter_num):
         """
-        OPTIMIZATION: Get a set of chapter numbers that already exist in the database
-        Returns empty set if table doesn't exist
+        NEW: Get a set of page numbers that already exist for a specific chapter
+        Returns empty set if no pages exist
+        This allows us to download only missing pages instead of skipping entire chapter
         """
         manga_id_normalized = manga_id.replace("-", "_")
         max_retries = 3
@@ -123,10 +124,76 @@ class SQLiteHelper:
                     conn.close()
                     return set()
                 
-                # Get distinct chapter numbers
-                query = f"SELECT DISTINCT chapter_num FROM [{manga_id_normalized}]"
+                # Get page numbers for this specific chapter
+                query = f"SELECT page_number FROM [{manga_id_normalized}] WHERE chapter_num = ?"
+                cursor.execute(query, (str(chapter_num),))
+                pages = {row[0] for row in cursor.fetchall()}
+                
+                conn.close()
+                return pages
+                
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    print(f"Database locked, retrying... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(0.1 * (attempt + 1))
+                    continue
+                else:
+                    print(f"Error getting existing chapter pages: {e}")
+                    return set()
+            except sqlite3.Error as e:
+                print(f"Error getting existing chapter pages: {e}")
+                return set()
+
+    def get_chapters_with_status(self, manga_id):
+        """
+        NEW: Get dictionary of chapters with their completion status
+        Returns: {
+            'chapter_num': {
+                'page_count': int,
+                'is_complete': bool (if we know total pages),
+                'pages': set of page numbers
+            }
+        }
+        """
+        manga_id_normalized = manga_id.replace("-", "_")
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                
+                # Check if table exists
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name=?
+                """, (manga_id_normalized,))
+                
+                if not cursor.fetchone():
+                    conn.close()
+                    return {}
+                
+                # Get all chapters with their pages
+                query = f"""
+                    SELECT chapter_num, page_number 
+                    FROM [{manga_id_normalized}]
+                    ORDER BY chapter_num, page_number
+                """
                 cursor.execute(query)
-                chapters = {row[0] for row in cursor.fetchall()}
+                
+                chapters = {}
+                for row in cursor.fetchall():
+                    chapter_num = row[0]
+                    page_number = row[1]
+                    
+                    if chapter_num not in chapters:
+                        chapters[chapter_num] = {
+                            'page_count': 0,
+                            'pages': set()
+                        }
+                    
+                    chapters[chapter_num]['pages'].add(page_number)
+                    chapters[chapter_num]['page_count'] += 1
                 
                 conn.close()
                 return chapters
@@ -137,54 +204,11 @@ class SQLiteHelper:
                     time.sleep(0.1 * (attempt + 1))
                     continue
                 else:
-                    print(f"Error getting existing chapters: {e}")
-                    return set()
+                    print(f"Error getting chapters with status: {e}")
+                    return {}
             except sqlite3.Error as e:
-                print(f"Error getting existing chapters: {e}")
-                return set()
-
-    def chapter_pages_exist(self, manga_id, chapter_num):
-        """
-        OPTIMIZATION: Check if a specific chapter already has pages in the database
-        Returns True if at least one page exists for this chapter
-        """
-        manga_id_normalized = manga_id.replace("-", "_")
-        max_retries = 3
-        
-        for attempt in range(max_retries):
-            try:
-                conn = self._get_connection()
-                cursor = conn.cursor()
-                
-                # Check if table exists
-                cursor.execute("""
-                    SELECT name FROM sqlite_master 
-                    WHERE type='table' AND name=?
-                """, (manga_id_normalized,))
-                
-                if not cursor.fetchone():
-                    conn.close()
-                    return False
-                
-                # Check if chapter has any pages
-                query = f"SELECT COUNT(*) FROM [{manga_id_normalized}] WHERE chapter_num = ?"
-                cursor.execute(query, (str(chapter_num),))
-                count = cursor.fetchone()[0]
-                
-                conn.close()
-                return count > 0
-                
-            except sqlite3.OperationalError as e:
-                if "database is locked" in str(e) and attempt < max_retries - 1:
-                    print(f"Database locked, retrying... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(0.1 * (attempt + 1))
-                    continue
-                else:
-                    print(f"Error checking if chapter pages exist: {e}")
-                    return False
-            except sqlite3.Error as e:
-                print(f"Error checking if chapter pages exist: {e}")
-                return False
+                print(f"Error getting chapters with status: {e}")
+                return {}
 
     def insert_manga_metadata(self, table_name, manga):
         max_retries = 3
