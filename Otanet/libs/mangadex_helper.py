@@ -71,8 +71,7 @@ class MangaDexHelper:
             offset += len(chapter_set)
 
         manga.set_chapters(chapters) 
-        #should_download = manga.set_latest_chapter()
-        should_download = True
+        should_download = manga.set_latest_chapter()
         return should_download
         
     def download_chapters(self, manga):  
