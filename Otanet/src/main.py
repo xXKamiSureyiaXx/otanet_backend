@@ -160,7 +160,7 @@ s3_thread.start()
 print("Started S3 upload thread")
 
 # Start 10 worker threads
-NUM_WORKERS = 10
+NUM_WORKERS = 20
 workers = []
 for i in range(NUM_WORKERS):
     t = Thread(target=worker_thread, args=(i, offset_queue, root_dir, s3_upload_queue))
@@ -171,7 +171,7 @@ print(f"Started {NUM_WORKERS} worker threads")
 
 # Main loop: continuously add offsets to the queue
 cycle_offset = 0
-MAX_OFFSET = 3000  # Cycle back after reaching this offset
+MAX_OFFSET = 6000  # Cycle back after reaching this offset
 
 print("\n" + "="*60)
 print("MangaDex Scraper Started Successfully!")
