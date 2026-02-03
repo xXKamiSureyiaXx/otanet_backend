@@ -23,6 +23,11 @@ class MetricsCollector:
     def __init__(self):
         if self._initialized:
             return
+        
+        self.persistence_file = "metrics_state.json"
+        self._load_state()
+        threading.Thread(target=self._auto_save_loop, daemon=True).start()
+
             
         self._initialized = True
         self.start_time = time.time()
@@ -212,6 +217,7 @@ class MetricsCollector:
                     'manga_per_hour': (self.manga_stats['processed'] / uptime * 3600) if uptime > 0 else 0,
                     'chapters_per_hour': (self.chapter_stats['total_chapters'] / uptime * 3600) if uptime > 0 else 0
                 },
+                'request_queue': active_requests,
                 'worker_stats': {
                     str(worker_id): {
                             'manga_processed': stats['manga_processed'],

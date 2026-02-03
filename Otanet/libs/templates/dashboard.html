@@ -452,6 +452,19 @@
       </div>
     </div>
 
+    <div class="card" style="margin-bottom: 20px">
+      <div class="card-title">Requested Manga Queue</div>
+      <table class="stats-table">
+        <thead>
+          <tr>
+            <th>Manga ID</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="request-queue-table"></tbody>
+      </table>
+    </div>
+
     <script>
       let apiChart = null;
 
@@ -497,6 +510,27 @@
             },
           },
         });
+      }
+
+      function updateRequestQueue(queueData) {
+        const tbody = document.getElementById("request-queue-table");
+        tbody.innerHTML = "";
+
+        for (const mangaId in queueData) {
+          const status = queueData[mangaId];
+          const row = document.createElement("tr");
+
+          let badgeClass = "success-badge";
+          if (status === "queued") badgeClass = "";
+          if (status === "processing") badgeClass = "status-badge";
+          if (status === "failed") badgeClass = "error-badge";
+
+          row.innerHTML = `
+            <td>${mangaId}</td>
+            <td><span class="${badgeClass}">${status}</span></td>
+        `;
+          tbody.appendChild(row);
+        }
       }
 
       // Update dashboard
@@ -585,6 +619,7 @@
 
             // Worker stats
             updateWorkerTable(data.worker_stats);
+            updateRequestQueue(data.request_queue);
           })
           .catch((error) => console.error("Error fetching metrics:", error));
       }
@@ -609,7 +644,10 @@
                         <span class="worker-status ${isActive ? "worker-active" : "worker-idle"}"></span>
                         ${isActive ? "Active" : "Idle"}
                     </td>
-                    <td>${worker.current_manga || "None"}</td>
+                    <td>
+                        ${worker.current_manga || "None"}
+                        ${worker.current_manga && data.request_queue && data.request_queue[worker.current_manga] ? "⭐" : ""}
+                    </td>
                     <td>${worker.manga_processed}</td>
                     <td>${worker.chapters_downloaded}</td>
                     <td>${lastActivity ? lastActivity.toLocaleTimeString() : "Never"}</td>
