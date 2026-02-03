@@ -213,7 +213,7 @@ class MetricsCollector:
                     'chapters_per_hour': (self.chapter_stats['total_chapters'] / uptime * 3600) if uptime > 0 else 0
                 },
                 'worker_stats': {
-                    worker_id: {
+                    str(worker_id): {
                             'manga_processed': stats['manga_processed'],
                             'chapters_downloaded': stats['chapters_downloaded'],
                             'current_manga': stats['current_manga'],
