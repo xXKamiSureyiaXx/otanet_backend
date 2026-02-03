@@ -618,13 +618,13 @@
               data.error_stats.api_errors;
 
             // Worker stats
-            updateWorkerTable(data.worker_stats);
+            updateWorkerTable(data.worker_stats, data.request_queue);
             updateRequestQueue(data.request_queue);
           })
           .catch((error) => console.error("Error fetching metrics:", error));
       }
 
-      function updateWorkerTable(workerStats) {
+      function updateWorkerTable(workerStats, requestQueue) {
         const tbody = document.getElementById("worker-table");
         tbody.innerHTML = "";
 
@@ -636,22 +636,27 @@
           const lastActivity = worker.last_activity
             ? new Date(worker.last_activity)
             : null;
-          const isActive = lastActivity && now - lastActivity < 60000; // Active if < 1 min ago
+          const isActive = lastActivity && now - lastActivity < 60000;
+
+          const isPriority =
+            worker.current_manga &&
+            requestQueue &&
+            requestQueue[worker.current_manga];
 
           row.innerHTML = `
-                    <td><strong>Worker ${workerId}</strong></td>
-                    <td>
-                        <span class="worker-status ${isActive ? "worker-active" : "worker-idle"}"></span>
-                        ${isActive ? "Active" : "Idle"}
-                    </td>
-                    <td>
-                        ${worker.current_manga || "None"}
-                        ${worker.current_manga && data.request_queue && data.request_queue[worker.current_manga] ? "⭐" : ""}
-                    </td>
-                    <td>${worker.manga_processed}</td>
-                    <td>${worker.chapters_downloaded}</td>
-                    <td>${lastActivity ? lastActivity.toLocaleTimeString() : "Never"}</td>
-                `;
+            <td><strong>Worker ${workerId}</strong></td>
+            <td>
+                <span class="worker-status ${isActive ? "worker-active" : "worker-idle"}"></span>
+                ${isActive ? "Active" : "Idle"}
+            </td>
+            <td>
+                ${worker.current_manga || "None"}
+                ${isPriority ? " ⭐" : ""}
+            </td>
+            <td>${worker.manga_processed}</td>
+            <td>${worker.chapters_downloaded}</td>
+            <td>${lastActivity ? lastActivity.toLocaleTimeString() : "Never"}</td>
+        `;
 
           tbody.appendChild(row);
         }

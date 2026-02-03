@@ -22,7 +22,7 @@ def dashboard():
 @app.route('/api/metrics')
 def get_metrics():
     data = metrics.get_all_metrics()
-    data['request_queue'] = active_requests  # attach queue state here
+    data['request_queue'] = dict(active_requests)  # ensure serializable copy
     return jsonify(data)
 
 
