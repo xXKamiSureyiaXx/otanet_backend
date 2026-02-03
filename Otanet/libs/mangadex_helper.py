@@ -62,7 +62,7 @@ class MangaDexHelper:
         If it exists and has chapters, only fetch new chapters
         """
         # Check if manga exists and get its latest chapter from DB
-        existing_chapter = self.db.get_manga_latest_chapter('manga_metadata', manga.get_id())
+        existing_chapter = self.db.get_manga_latest_chapter(manga.get_id().replace('-','_'), manga.get_id())
         
         all_chapters = []
         offset = 0
