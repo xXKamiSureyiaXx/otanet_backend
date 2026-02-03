@@ -1,544 +1,666 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MangaDex Scraper Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
-            padding: 20px;
-            min-height: 100vh;
-        }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #333;
+        padding: 20px;
+        min-height: 100vh;
+      }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
 
-        .header {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
+      .header {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
 
-        .header h1 {
-            color: #667eea;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
+      .header h1 {
+        color: #667eea;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
 
-        .status-badge {
-            display: inline-block;
-            padding: 6px 16px;
-            background: #10b981;
-            color: white;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 0.9em;
-        }
+      .status-badge {
+        display: inline-block;
+        padding: 6px 16px;
+        background: #10b981;
+        color: white;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9em;
+      }
 
-        .uptime {
-            color: #6b7280;
-            font-size: 1.1em;
-            margin-top: 10px;
-        }
+      .uptime {
+        color: #6b7280;
+        font-size: 1.1em;
+        margin-top: 10px;
+      }
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+      }
 
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
+      .card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+      }
 
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+      }
 
-        .card-title {
-            font-size: 0.9em;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 15px;
-            font-weight: 600;
-        }
+      .card-title {
+        font-size: 0.9em;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 15px;
+        font-weight: 600;
+      }
 
-        .card-value {
-            font-size: 2.5em;
-            font-weight: bold;
-            color: #1f2937;
-            margin-bottom: 5px;
-        }
+      .card-value {
+        font-size: 2.5em;
+        font-weight: bold;
+        color: #1f2937;
+        margin-bottom: 5px;
+      }
 
-        .card-label {
-            font-size: 0.95em;
-            color: #9ca3af;
-        }
+      .card-label {
+        font-size: 0.95em;
+        color: #9ca3af;
+      }
 
-        .card-trend {
-            font-size: 0.85em;
-            color: #10b981;
-            margin-top: 8px;
-        }
+      .card-trend {
+        font-size: 0.85em;
+        color: #10b981;
+        margin-top: 8px;
+      }
 
-        .chart-container {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
+      .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
 
-        .chart-title {
-            font-size: 1.2em;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 20px;
-        }
+      .chart-title {
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 20px;
+      }
 
-        .stats-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+      .stats-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
 
-        .stats-table th {
-            text-align: left;
-            padding: 12px;
-            background: #f9fafb;
-            color: #6b7280;
-            font-weight: 600;
-            font-size: 0.85em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+      .stats-table th {
+        text-align: left;
+        padding: 12px;
+        background: #f9fafb;
+        color: #6b7280;
+        font-weight: 600;
+        font-size: 0.85em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
 
-        .stats-table td {
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
-            color: #1f2937;
-        }
+      .stats-table td {
+        padding: 12px;
+        border-bottom: 1px solid #e5e7eb;
+        color: #1f2937;
+      }
 
-        .stats-table tr:last-child td {
-            border-bottom: none;
-        }
+      .stats-table tr:last-child td {
+        border-bottom: none;
+      }
 
-        .worker-status {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
+      .worker-status {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
 
-        .worker-active {
-            background: #10b981;
-        }
+      .worker-active {
+        background: #10b981;
+      }
 
-        .worker-idle {
-            background: #6b7280;
-        }
+      .worker-idle {
+        background: #6b7280;
+      }
 
-        .progress-bar {
-            height: 8px;
-            background: #e5e7eb;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 8px;
-        }
+      .progress-bar {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 8px;
+      }
 
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s ease;
-        }
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        transition: width 0.3s ease;
+      }
 
-        .metric-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-        }
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+      }
 
-        .metric-item {
-            padding: 15px;
-            background: #f9fafb;
-            border-radius: 8px;
-        }
+      .metric-item {
+        padding: 15px;
+        background: #f9fafb;
+        border-radius: 8px;
+      }
 
-        .metric-item-label {
-            font-size: 0.85em;
-            color: #6b7280;
-            margin-bottom: 5px;
-        }
+      .metric-item-label {
+        font-size: 0.85em;
+        color: #6b7280;
+        margin-bottom: 5px;
+      }
 
-        .metric-item-value {
-            font-size: 1.5em;
-            font-weight: 600;
-            color: #1f2937;
-        }
+      .metric-item-value {
+        font-size: 1.5em;
+        font-weight: 600;
+        color: #1f2937;
+      }
 
-        .error-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            background: #fee2e2;
-            color: #dc2626;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-        }
+      .error-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        background: #fee2e2;
+        color: #dc2626;
+        border-radius: 12px;
+        font-size: 0.85em;
+        font-weight: 600;
+      }
 
-        .success-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            background: #d1fae5;
-            color: #059669;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-        }
+      .success-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        background: #d1fae5;
+        color: #059669;
+        border-radius: 12px;
+        font-size: 0.85em;
+        font-weight: 600;
+      }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
         }
+        50% {
+          opacity: 0.5;
+        }
+      }
 
-        .updating {
-            animation: pulse 2s ease-in-out infinite;
-        }
+      .updating {
+        animation: pulse 2s ease-in-out infinite;
+      }
 
-        .last-updated {
-            text-align: right;
-            color: #9ca3af;
-            font-size: 0.85em;
-            margin-top: 10px;
-        }
+      .last-updated {
+        text-align: right;
+        color: #9ca3af;
+        font-size: 0.85em;
+        margin-top: 10px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <h1>🎌 MangaDex Scraper Dashboard</h1>
-            <span class="status-badge">● RUNNING</span>
-            <div class="uptime">Uptime: <span id="uptime">--</span></div>
-            <div class="last-updated">Last updated: <span id="last-updated">--</span></div>
+      <div class="header">
+        <h1>🎌 MangaDex Scraper Dashboard</h1>
+        <span class="status-badge">● RUNNING</span>
+        <div class="uptime">Uptime: <span id="uptime">--</span></div>
+        <div class="last-updated">
+          Last updated: <span id="last-updated">--</span>
         </div>
+      </div>
 
-        <!-- Key Metrics -->
-        <div class="grid">
-            <div class="card">
-                <div class="card-title">API Calls / Second</div>
-                <div class="card-value" id="api-rate">0.0</div>
-                <div class="card-label">requests/sec</div>
-                <div class="card-trend">Total: <span id="total-api">0</span></div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">Pages / Second</div>
-                <div class="card-value" id="page-rate">0.0</div>
-                <div class="card-label">pages/sec</div>
-                <div class="card-trend">Downloaded: <span id="total-pages">0</span></div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">Manga Processed</div>
-                <div class="card-value" id="manga-processed">0</div>
-                <div class="card-label">total manga</div>
-                <div class="card-trend"><span id="manga-per-hour">0</span> manga/hour</div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">Total Chapters</div>
-                <div class="card-value" id="total-chapters">0</div>
-                <div class="card-label">chapters</div>
-                <div class="card-trend"><span id="chapters-per-hour">0</span> chapters/hour</div>
-            </div>
+      <!-- Operator Controls -->
+      <div class="card" style="margin-bottom: 20px">
+        <div class="card-title">Operator Controls</div>
+        <div
+          style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center"
+        >
+          <input
+            type="text"
+            id="manga-id-input"
+            placeholder="Enter MangaDex Manga ID"
+            style="
+              flex: 1;
+              min-width: 260px;
+              padding: 10px 14px;
+              border-radius: 8px;
+              border: 1px solid #e5e7eb;
+              font-size: 14px;
+            "
+          />
+          <button
+            onclick="requestManga()"
+            style="
+              padding: 10px 18px;
+              border-radius: 8px;
+              border: none;
+              background: linear-gradient(90deg, #667eea, #764ba2);
+              color: white;
+              font-weight: 600;
+              cursor: pointer;
+            "
+          >
+            Fetch Manga
+          </button>
+          <span
+            id="request-status"
+            style="font-size: 14px; color: #6b7280"
+          ></span>
         </div>
+      </div>
 
-        <!-- Charts -->
-        <div class="chart-container">
-            <div class="chart-title">API Call Breakdown</div>
-            <canvas id="apiChart" height="80"></canvas>
-        </div>
-
-        <!-- Detailed Stats -->
-        <div class="grid">
-            <!-- Manga Stats -->
-            <div class="card">
-                <div class="card-title">Manga Statistics</div>
-                <div class="metric-grid">
-                    <div class="metric-item">
-                        <div class="metric-item-label">New Manga</div>
-                        <div class="metric-item-value" id="new-manga">0</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-item-label">Updated Manga</div>
-                        <div class="metric-item-value" id="updated-manga">0</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-item-label">With New Chapters</div>
-                        <div class="metric-item-value" id="with-new-chapters">0</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-item-label">Skipped</div>
-                        <div class="metric-item-value" id="skipped-manga">0</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chapter Stats -->
-            <div class="card">
-                <div class="card-title">Chapter Statistics</div>
-                <div class="metric-grid">
-                    <div class="metric-item">
-                        <div class="metric-item-label">New Chapters</div>
-                        <div class="metric-item-value" id="new-chapters">0</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-item-label">Complete</div>
-                        <div class="metric-item-value" id="complete-chapters">0</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-item-label">Partial</div>
-                        <div class="metric-item-value" id="partial-chapters">0</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-item-label">Skipped Complete</div>
-                        <div class="metric-item-value" id="skipped-chapters">0</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page & S3 Stats -->
-        <div class="grid">
-            <div class="card">
-                <div class="card-title">Page Downloads</div>
-                <table class="stats-table">
-                    <tr>
-                        <td>Total Pages</td>
-                        <td><strong id="page-total">0</strong></td>
-                    </tr>
-                    <tr>
-                        <td>Downloaded</td>
-                        <td><span class="success-badge" id="page-downloaded">0</span></td>
-                    </tr>
-                    <tr>
-                        <td>Skipped (existing)</td>
-                        <td><span class="success-badge" id="page-skipped">0</span></td>
-                    </tr>
-                    <tr>
-                        <td>Failed</td>
-                        <td><span class="error-badge" id="page-failed">0</span></td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class="card">
-                <div class="card-title">S3 & Errors</div>
-                <table class="stats-table">
-                    <tr>
-                        <td>S3 Uploads</td>
-                        <td><strong id="s3-uploads">0</strong></td>
-                    </tr>
-                    <tr>
-                        <td>Last Upload</td>
-                        <td id="s3-last-upload">Never</td>
-                    </tr>
-                    <tr>
-                        <td>Rate Limits</td>
-                        <td><span class="error-badge" id="rate-limits">0</span></td>
-                    </tr>
-                    <tr>
-                        <td>API Errors</td>
-                        <td><span class="error-badge" id="api-errors">0</span></td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-
-        <!-- Worker Status -->
+      <!-- Key Metrics -->
+      <div class="grid">
         <div class="card">
-            <div class="card-title">Worker Status</div>
-            <table class="stats-table">
-                <thead>
-                    <tr>
-                        <th>Worker</th>
-                        <th>Status</th>
-                        <th>Current Manga</th>
-                        <th>Manga Processed</th>
-                        <th>Chapters</th>
-                        <th>Last Activity</th>
-                    </tr>
-                </thead>
-                <tbody id="worker-table">
-                    <!-- Worker rows will be inserted here -->
-                </tbody>
-            </table>
+          <div class="card-title">API Calls / Second</div>
+          <div class="card-value" id="api-rate">0.0</div>
+          <div class="card-label">requests/sec</div>
+          <div class="card-trend">Total: <span id="total-api">0</span></div>
         </div>
+
+        <div class="card">
+          <div class="card-title">Pages / Second</div>
+          <div class="card-value" id="page-rate">0.0</div>
+          <div class="card-label">pages/sec</div>
+          <div class="card-trend">
+            Downloaded: <span id="total-pages">0</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Manga Processed</div>
+          <div class="card-value" id="manga-processed">0</div>
+          <div class="card-label">total manga</div>
+          <div class="card-trend">
+            <span id="manga-per-hour">0</span> manga/hour
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Total Chapters</div>
+          <div class="card-value" id="total-chapters">0</div>
+          <div class="card-label">chapters</div>
+          <div class="card-trend">
+            <span id="chapters-per-hour">0</span> chapters/hour
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="chart-container">
+        <div class="chart-title">API Call Breakdown</div>
+        <canvas id="apiChart" height="80"></canvas>
+      </div>
+
+      <!-- Detailed Stats -->
+      <div class="grid">
+        <!-- Manga Stats -->
+        <div class="card">
+          <div class="card-title">Manga Statistics</div>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <div class="metric-item-label">New Manga</div>
+              <div class="metric-item-value" id="new-manga">0</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-item-label">Updated Manga</div>
+              <div class="metric-item-value" id="updated-manga">0</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-item-label">With New Chapters</div>
+              <div class="metric-item-value" id="with-new-chapters">0</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-item-label">Skipped</div>
+              <div class="metric-item-value" id="skipped-manga">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chapter Stats -->
+        <div class="card">
+          <div class="card-title">Chapter Statistics</div>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <div class="metric-item-label">New Chapters</div>
+              <div class="metric-item-value" id="new-chapters">0</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-item-label">Complete</div>
+              <div class="metric-item-value" id="complete-chapters">0</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-item-label">Partial</div>
+              <div class="metric-item-value" id="partial-chapters">0</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-item-label">Skipped Complete</div>
+              <div class="metric-item-value" id="skipped-chapters">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page & S3 Stats -->
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">Page Downloads</div>
+          <table class="stats-table">
+            <tr>
+              <td>Total Pages</td>
+              <td><strong id="page-total">0</strong></td>
+            </tr>
+            <tr>
+              <td>Downloaded</td>
+              <td><span class="success-badge" id="page-downloaded">0</span></td>
+            </tr>
+            <tr>
+              <td>Skipped (existing)</td>
+              <td><span class="success-badge" id="page-skipped">0</span></td>
+            </tr>
+            <tr>
+              <td>Failed</td>
+              <td><span class="error-badge" id="page-failed">0</span></td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-title">S3 & Errors</div>
+          <table class="stats-table">
+            <tr>
+              <td>S3 Uploads</td>
+              <td><strong id="s3-uploads">0</strong></td>
+            </tr>
+            <tr>
+              <td>Last Upload</td>
+              <td id="s3-last-upload">Never</td>
+            </tr>
+            <tr>
+              <td>Rate Limits</td>
+              <td><span class="error-badge" id="rate-limits">0</span></td>
+            </tr>
+            <tr>
+              <td>API Errors</td>
+              <td><span class="error-badge" id="api-errors">0</span></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- Worker Status -->
+      <div class="card">
+        <div class="card-title">Worker Status</div>
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>Worker</th>
+              <th>Status</th>
+              <th>Current Manga</th>
+              <th>Manga Processed</th>
+              <th>Chapters</th>
+              <th>Last Activity</th>
+            </tr>
+          </thead>
+          <tbody id="worker-table">
+            <!-- Worker rows will be inserted here -->
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <script>
-        let apiChart = null;
+      let apiChart = null;
 
-        // Initialize chart
-        function initChart() {
-            const ctx = document.getElementById('apiChart').getContext('2d');
-            apiChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Manga List', 'Chapter Feed', 'Page URLs', 'Cover Art'],
-                    datasets: [{
-                        label: 'API Calls',
-                        data: [0, 0, 0, 0],
-                        backgroundColor: [
-                            'rgba(102, 126, 234, 0.8)',
-                            'rgba(118, 75, 162, 0.8)',
-                            'rgba(237, 100, 166, 0.8)',
-                            'rgba(255, 154, 158, 0.8)'
-                        ],
-                        borderColor: [
-                            'rgba(102, 126, 234, 1)',
-                            'rgba(118, 75, 162, 1)',
-                            'rgba(237, 100, 166, 1)',
-                            'rgba(255, 154, 158, 1)'
-                        ],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
+      // Initialize chart
+      function initChart() {
+        const ctx = document.getElementById("apiChart").getContext("2d");
+        apiChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: ["Manga List", "Chapter Feed", "Page URLs", "Cover Art"],
+            datasets: [
+              {
+                label: "API Calls",
+                data: [0, 0, 0, 0],
+                backgroundColor: [
+                  "rgba(102, 126, 234, 0.8)",
+                  "rgba(118, 75, 162, 0.8)",
+                  "rgba(237, 100, 166, 0.8)",
+                  "rgba(255, 154, 158, 0.8)",
+                ],
+                borderColor: [
+                  "rgba(102, 126, 234, 1)",
+                  "rgba(118, 75, 162, 1)",
+                  "rgba(237, 100, 166, 1)",
+                  "rgba(255, 154, 158, 1)",
+                ],
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                display: false,
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+              },
+            },
+          },
+        });
+      }
 
-        // Update dashboard
-        function updateDashboard() {
-            fetch('/api/metrics')
-                .then(response => response.json())
-                .then(data => {
-                    // Header
-                    document.getElementById('uptime').textContent = data.uptime_formatted;
-                    document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+      // Update dashboard
+      function updateDashboard() {
+        fetch("/api/metrics")
+          .then((response) => response.json())
+          .then((data) => {
+            // Header
+            document.getElementById("uptime").textContent =
+              data.uptime_formatted;
+            document.getElementById("last-updated").textContent =
+              new Date().toLocaleTimeString();
 
-                    // Key metrics
-                    document.getElementById('api-rate').textContent = data.rates.api_per_second.toFixed(2);
-                    document.getElementById('page-rate').textContent = data.rates.pages_per_second.toFixed(2);
-                    document.getElementById('manga-processed').textContent = data.manga_stats.processed;
-                    document.getElementById('total-chapters').textContent = data.chapter_stats.total_chapters;
+            // Key metrics
+            document.getElementById("api-rate").textContent =
+              data.rates.api_per_second.toFixed(2);
+            document.getElementById("page-rate").textContent =
+              data.rates.pages_per_second.toFixed(2);
+            document.getElementById("manga-processed").textContent =
+              data.manga_stats.processed;
+            document.getElementById("total-chapters").textContent =
+              data.chapter_stats.total_chapters;
 
-                    document.getElementById('total-api').textContent = data.api_calls.total;
-                    document.getElementById('total-pages').textContent = data.page_stats.pages_downloaded;
-                    document.getElementById('manga-per-hour').textContent = Math.round(data.rates.manga_per_hour);
-                    document.getElementById('chapters-per-hour').textContent = Math.round(data.rates.chapters_per_hour);
+            document.getElementById("total-api").textContent =
+              data.api_calls.total;
+            document.getElementById("total-pages").textContent =
+              data.page_stats.pages_downloaded;
+            document.getElementById("manga-per-hour").textContent = Math.round(
+              data.rates.manga_per_hour,
+            );
+            document.getElementById("chapters-per-hour").textContent =
+              Math.round(data.rates.chapters_per_hour);
 
-                    // Update chart
-                    if (apiChart) {
-                        apiChart.data.datasets[0].data = [
-                            data.api_calls.manga_list,
-                            data.api_calls.chapter_feed,
-                            data.api_calls.page_urls,
-                            data.api_calls.cover_art
-                        ];
-                        apiChart.update();
-                    }
+            // Update chart
+            if (apiChart) {
+              apiChart.data.datasets[0].data = [
+                data.api_calls.manga_list,
+                data.api_calls.chapter_feed,
+                data.api_calls.page_urls,
+                data.api_calls.cover_art,
+              ];
+              apiChart.update();
+            }
 
-                    // Manga stats
-                    document.getElementById('new-manga').textContent = data.manga_stats.new_manga;
-                    document.getElementById('updated-manga').textContent = data.manga_stats.updated_manga;
-                    document.getElementById('with-new-chapters').textContent = data.manga_stats.with_new_chapters;
-                    document.getElementById('skipped-manga').textContent = data.manga_stats.skipped_no_chapters;
+            // Manga stats
+            document.getElementById("new-manga").textContent =
+              data.manga_stats.new_manga;
+            document.getElementById("updated-manga").textContent =
+              data.manga_stats.updated_manga;
+            document.getElementById("with-new-chapters").textContent =
+              data.manga_stats.with_new_chapters;
+            document.getElementById("skipped-manga").textContent =
+              data.manga_stats.skipped_no_chapters;
 
-                    // Chapter stats
-                    document.getElementById('new-chapters').textContent = data.chapter_stats.new_chapters;
-                    document.getElementById('complete-chapters').textContent = data.chapter_stats.complete_chapters;
-                    document.getElementById('partial-chapters').textContent = data.chapter_stats.partial_chapters;
-                    document.getElementById('skipped-chapters').textContent = data.chapter_stats.skipped_complete;
+            // Chapter stats
+            document.getElementById("new-chapters").textContent =
+              data.chapter_stats.new_chapters;
+            document.getElementById("complete-chapters").textContent =
+              data.chapter_stats.complete_chapters;
+            document.getElementById("partial-chapters").textContent =
+              data.chapter_stats.partial_chapters;
+            document.getElementById("skipped-chapters").textContent =
+              data.chapter_stats.skipped_complete;
 
-                    // Page stats
-                    document.getElementById('page-total').textContent = data.page_stats.total_pages;
-                    document.getElementById('page-downloaded').textContent = data.page_stats.pages_downloaded;
-                    document.getElementById('page-skipped').textContent = data.page_stats.pages_skipped;
-                    document.getElementById('page-failed').textContent = data.page_stats.failed_downloads;
+            // Page stats
+            document.getElementById("page-total").textContent =
+              data.page_stats.total_pages;
+            document.getElementById("page-downloaded").textContent =
+              data.page_stats.pages_downloaded;
+            document.getElementById("page-skipped").textContent =
+              data.page_stats.pages_skipped;
+            document.getElementById("page-failed").textContent =
+              data.page_stats.failed_downloads;
 
-                    // S3 & Errors
-                    document.getElementById('s3-uploads').textContent = data.s3_stats.uploads;
-                    document.getElementById('s3-last-upload').textContent = data.s3_stats.last_upload 
-                        ? new Date(data.s3_stats.last_upload).toLocaleString() 
-                        : 'Never';
-                    document.getElementById('rate-limits').textContent = data.error_stats.rate_limits;
-                    document.getElementById('api-errors').textContent = data.error_stats.api_errors;
+            // S3 & Errors
+            document.getElementById("s3-uploads").textContent =
+              data.s3_stats.uploads;
+            document.getElementById("s3-last-upload").textContent = data
+              .s3_stats.last_upload
+              ? new Date(data.s3_stats.last_upload).toLocaleString()
+              : "Never";
+            document.getElementById("rate-limits").textContent =
+              data.error_stats.rate_limits;
+            document.getElementById("api-errors").textContent =
+              data.error_stats.api_errors;
 
-                    // Worker stats
-                    updateWorkerTable(data.worker_stats);
-                })
-                .catch(error => console.error('Error fetching metrics:', error));
-        }
+            // Worker stats
+            updateWorkerTable(data.worker_stats);
+          })
+          .catch((error) => console.error("Error fetching metrics:", error));
+      }
 
-        function updateWorkerTable(workerStats) {
-            const tbody = document.getElementById('worker-table');
-            tbody.innerHTML = '';
+      function updateWorkerTable(workerStats) {
+        const tbody = document.getElementById("worker-table");
+        tbody.innerHTML = "";
 
-            for (let workerId in workerStats) {
-                const worker = workerStats[workerId];
-                const row = document.createElement('tr');
-                
-                const now = new Date();
-                const lastActivity = worker.last_activity ? new Date(worker.last_activity) : null;
-                const isActive = lastActivity && (now - lastActivity) < 60000; // Active if < 1 min ago
-                
-                row.innerHTML = `
+        for (let workerId in workerStats) {
+          const worker = workerStats[workerId];
+          const row = document.createElement("tr");
+
+          const now = new Date();
+          const lastActivity = worker.last_activity
+            ? new Date(worker.last_activity)
+            : null;
+          const isActive = lastActivity && now - lastActivity < 60000; // Active if < 1 min ago
+
+          row.innerHTML = `
                     <td><strong>Worker ${workerId}</strong></td>
                     <td>
-                        <span class="worker-status ${isActive ? 'worker-active' : 'worker-idle'}"></span>
-                        ${isActive ? 'Active' : 'Idle'}
+                        <span class="worker-status ${isActive ? "worker-active" : "worker-idle"}"></span>
+                        ${isActive ? "Active" : "Idle"}
                     </td>
-                    <td>${worker.current_manga || 'None'}</td>
+                    <td>${worker.current_manga || "None"}</td>
                     <td>${worker.manga_processed}</td>
                     <td>${worker.chapters_downloaded}</td>
-                    <td>${lastActivity ? lastActivity.toLocaleTimeString() : 'Never'}</td>
+                    <td>${lastActivity ? lastActivity.toLocaleTimeString() : "Never"}</td>
                 `;
-                
-                tbody.appendChild(row);
-            }
+
+          tbody.appendChild(row);
+        }
+      }
+
+      async function requestManga() {
+        const mangaId = document.getElementById("manga-id-input").value.trim();
+        const statusEl = document.getElementById("request-status");
+
+        if (!mangaId) {
+          statusEl.textContent = "Please enter a Manga ID";
+          statusEl.style.color = "#dc2626";
+          return;
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            initChart();
-            updateDashboard();
-            setInterval(updateDashboard, 2000); // Update every 2 seconds
-        });
+        statusEl.textContent = "Starting job...";
+        statusEl.style.color = "#6b7280";
+
+        try {
+          const res = await fetch("/api/request-manga", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ manga_id: mangaId }),
+          });
+
+          const data = await res.json();
+
+          if (res.ok) {
+            statusEl.textContent = "✅ Processing started!";
+            statusEl.style.color = "#059669";
+            document.getElementById("manga-id-input").value = "";
+          } else {
+            statusEl.textContent = "❌ " + (data.error || "Failed");
+            statusEl.style.color = "#dc2626";
+          }
+        } catch (err) {
+          statusEl.textContent = "❌ Network error";
+          statusEl.style.color = "#dc2626";
+        }
+      }
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", function () {
+        initChart();
+        updateDashboard();
+        setInterval(updateDashboard, 2000); // Update every 2 seconds
+      });
     </script>
-</body>
+  </body>
 </html>
