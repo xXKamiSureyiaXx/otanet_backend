@@ -79,7 +79,7 @@ class SQLiteHelper:
                 cursor = conn.cursor()
                 
                 query = f"SELECT MAX(DISTINCT chapter_num) FROM [{table_name}]"
-                cursor.execute(query, (manga_hash,))
+                cursor.execute(query)
                 result = cursor.fetchone()
                 
                 conn.close()
