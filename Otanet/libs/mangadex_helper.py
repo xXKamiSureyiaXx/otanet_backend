@@ -189,12 +189,25 @@ class MangaDexHelper:
 
             tags = []
             for tag in manga["data"]["attributes"]["tags"]:
-                tags.append(self.utils.normalize_database_text(tag["attributes"]["name"]["en"]))
+                try: 
+                    tags.append(self.utils.normalize_database_text(tag["attributes"]["name"]["en"]))
+                except:
+                    continue
+      
+            try:
+                title = self.utils.normalize_database_text(manga["data"]["attributes"]["title"]["en"])
+            except:
+                title = "Title Not Available"
 
+            try:
+                description = self.utils.normalize_database_text(manga["data"]["attributes"]["description"]["en"])
+            except:
+                description = "Description Not Available"
+            
             dict = {
                     'id': manga['data']['id'],
-                    'title': self.utils.normalize_database_text(manga["data"]["attributes"]["title"]["en"]),
-                    'description': self.utils.normalize_database_text(manga["data"]["attributes"]["description"]["en"]),
+                    'title': title,
+                    'description': description,
                     'cover_img': f"https://uploads.mangadex.org/covers/{manga['data']['id']}/{cover_id}",
                     'tags': tags
                 }
