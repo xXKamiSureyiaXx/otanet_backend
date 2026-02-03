@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request
 from metrics_collector import MetricsCollector
 from mangadex_helper import MangaDexHelper
 from manga_factory import MangaFactory
+from sqlite_helper import SQLiteHelper
 import threading
 from queue import Queue
 import time
@@ -66,6 +67,8 @@ def request_queue_worker():
                 continue
 
             manga = MangaFactory(manga_data)
+            SQLiteHelper().insert_manga_metadata("manga_metadata", manga)
+            
             should_download = helper.set_latest_chapters(manga)
 
             if should_download:
