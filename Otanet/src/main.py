@@ -160,7 +160,7 @@ s3_thread.start()
 print("Started S3 upload thread")
 
 # Start 10 worker threads
-NUM_WORKERS = 20
+NUM_WORKERS = 10
 workers = []
 for i in range(NUM_WORKERS):
     t = Thread(target=worker_thread, args=(i, offset_queue, root_dir, s3_upload_queue))
