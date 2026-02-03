@@ -107,10 +107,10 @@ def run_dashboard(host='0.0.0.0', port=5000):
         target=lambda: app.run(host=host, port=port, debug=False, use_reloader=False),
         daemon=True
     )
+    threading.Thread(target=request_queue_worker, daemon=True).start()
     dashboard_thread.start()
     print(f"Dashboard started at http://{host}:{port}")
     return dashboard_thread
 
 if __name__ == '__main__':
-    threading.Thread(target=request_queue_worker, daemon=True).start()
     app.run(host='0.0.0.0', port=5000, debug=True)
