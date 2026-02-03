@@ -171,7 +171,7 @@ print(f"Started {NUM_WORKERS} worker threads")
 
 # Main loop: continuously add offsets to the queue
 cycle_offset = 0
-MAX_OFFSET = 300  # Cycle back after reaching this offset
+MAX_OFFSET = 3000  # Cycle back after reaching this offset
 
 print("\n" + "="*60)
 print("MangaDex Scraper Started Successfully!")
@@ -195,8 +195,8 @@ while True:
         # Move to next cycle (only affects workers 1-9)
         cycle_offset += (NUM_WORKERS - 1)
         
-        print('[Main] Sleeping 10 minutes')
-        time.sleep(10*60)
+        print('[Main] Sleeping 5 minutes')
+        time.sleep(5*60)
         
     except KeyboardInterrupt:
         print("\n[Main] Shutting down...")
