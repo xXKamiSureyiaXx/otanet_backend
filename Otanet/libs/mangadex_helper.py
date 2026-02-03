@@ -255,9 +255,9 @@ class MangaDexHelper:
                 self.metrics.record_api_call('page_urls')
 
                 if 'Rate Limit Exceeded' in str(resp_json):
-                    print("Rate Limited...Backing off for 2 minutes")
+                    print("Rate Limited...Backing off for 1 minute")
                     self.metrics.record_error('rate_limits')
-                    time.sleep(60 * 2)
+                    time.sleep(60 * 1)
                     retries += 1
                     continue
                 
