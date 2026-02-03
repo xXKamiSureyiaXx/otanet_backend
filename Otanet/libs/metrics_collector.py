@@ -93,6 +93,40 @@ class MetricsCollector:
         self.metrics_thread = threading.Thread(target=self._calculate_rates, daemon=True)
         self.metrics_thread.start()
     
+    def _auto_save_loop(self):
+        while self.running:
+            self._save_state()
+            time.sleep(30)
+
+    def _save_state(self):
+        with self._lock:
+            state = {
+                'api_calls': self.api_calls,
+                'manga_stats': self.manga_stats,
+                'chapter_stats': self.chapter_stats,
+                'page_stats': self.page_stats,
+                's3_stats': {
+                    **self.s3_stats,
+                    'last_upload': self.s3_stats['last_upload'].isoformat() if self.s3_stats['last_upload'] else None
+                },
+                'error_stats': self.error_stats
+            }
+            with open(self.persistence_file, "w") as f:
+                json.dump(state, f)
+
+    def _load_state(self):
+        try:
+            with open(self.persistence_file, "r") as f:
+                state = json.load(f)
+                self.api_calls.update(state.get('api_calls', {}))
+                self.manga_stats.update(state.get('manga_stats', {}))
+                self.chapter_stats.update(state.get('chapter_stats', {}))
+                self.page_stats.update(state.get('page_stats', {}))
+                self.error_stats.update(state.get('error_stats', {}))
+        except:
+            pass
+
+
     def _calculate_rates(self):
         """Calculate per-second rates"""
         last_api_count = 0
@@ -217,7 +251,6 @@ class MetricsCollector:
                     'manga_per_hour': (self.manga_stats['processed'] / uptime * 3600) if uptime > 0 else 0,
                     'chapters_per_hour': (self.chapter_stats['total_chapters'] / uptime * 3600) if uptime > 0 else 0
                 },
-                'request_queue': active_requests,
                 'worker_stats': {
                     str(worker_id): {
                             'manga_processed': stats['manga_processed'],
