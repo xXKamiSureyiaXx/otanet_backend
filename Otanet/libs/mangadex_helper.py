@@ -69,6 +69,7 @@ class MangaDexHelper:
         
         # Fetch all chapters (we need to know the absolute latest)
         while True:
+            time.sleep(random.uniform(5, 20.0))  # Stagger requests
             response = requests.get(
                 f"{self.base_url}/manga/{manga.get_id()}/feed",
                 params={"translatedLanguage[]": self.languages, "offset": offset, "limit": 100},

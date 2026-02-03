@@ -212,7 +212,15 @@ class MetricsCollector:
                     'manga_per_hour': (self.manga_stats['processed'] / uptime * 3600) if uptime > 0 else 0,
                     'chapters_per_hour': (self.chapter_stats['total_chapters'] / uptime * 3600) if uptime > 0 else 0
                 },
-                'worker_stats': dict(self.worker_stats),
+                'worker_stats': {
+                    worker_id: {
+                            'manga_processed': stats['manga_processed'],
+                            'chapters_downloaded': stats['chapters_downloaded'],
+                            'current_manga': stats['current_manga'],
+                            'last_activity': stats['last_activity'].isoformat() if stats['last_activity'] else None
+                        }
+                    for worker_id, stats in self.worker_stats.items()
+                },
                 'timestamp': datetime.now().isoformat()
             }
     
