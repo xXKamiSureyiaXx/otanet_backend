@@ -160,7 +160,7 @@ s3_thread.start()
 print("Started S3 upload thread")
 
 # Start 10 worker threads
-NUM_WORKERS = 6
+NUM_WORKERS = 8
 workers = []
 for i in range(NUM_WORKERS):
     t = Thread(target=worker_thread, args=(i, offset_queue, root_dir, s3_upload_queue))
@@ -188,7 +188,7 @@ while True:
             if i == 0:
                 offset = 0  # Worker 0 always gets offset 0
             else:
-                offset = ((cycle_offset + i - 1) % (MAX_OFFSET // 5)) * 5 + 5
+                offset = ((cycle_offset + i - 1) % (MAX_OFFSET // 8)) * 8 + 8
             offset_queue.put(offset)
             print(f"[Main] Queued offset {offset}")
         
