@@ -2,7 +2,7 @@ import os
 import sys
 import time
 from queue import Queue
-from threading import Thread
+from threading import Thread, Lock
 import random
 
 path = os.getcwd()
@@ -16,6 +16,10 @@ from sqlite_helper import SQLiteHelper
 from metrics_collector import MetricsCollector
 from dashboard import run_dashboard
 ##################################
+
+# Global tracking for concurrent manga processing
+processing_manga = set()  # Track manga IDs currently being processed
+processing_lock = Lock()  # Lock to safely access the set
 
 def worker_thread(worker_id, offset_queue, root_dir, s3_upload_queue):
     """Each worker continuously processes manga from offset queue"""
@@ -48,35 +52,50 @@ def worker_thread(worker_id, offset_queue, root_dir, s3_upload_queue):
                 try:
                     print(f"[Worker {worker_id}] Creating Manga Obj for {manga['title']}")
                     manga_obj = MangaFactory(manga)
+                    manga_id = manga_obj.get_id()
                     
-                    # Check if this is new manga
-                    existing_chapter = sqlite_helper.get_manga_latest_chapter('manga_metadata', manga_obj.get_id())
-                    is_new_manga = existing_chapter is None
+                    # Check if another worker is already processing this manga
+                    with processing_lock:
+                        if manga_id in processing_manga:
+                            print(f"[Worker {worker_id}] Manga {manga_obj.get_title()} already being processed by another worker, skipping")
+                            continue
+                        # Mark this manga as being processed
+                        processing_manga.add(manga_id)
                     
-                    print(f"[Worker {worker_id}] Setting Latest Chapter")
-                    should_download = mangadex_helper.set_latest_chapters(manga_obj)
-                    
-                    # Record manga processing
-                    metrics.record_manga_processed(
-                        worker_id=worker_id,
-                        manga_title=manga_obj.get_title(),
-                        is_new=is_new_manga,
-                        has_new_chapters=should_download
-                    )
-                    
-                    if should_download:
-                        print(f"[Worker {worker_id}] Inserting into Database")
-                        sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                    try:
+                        # Check if this is new manga
+                        existing_chapter = sqlite_helper.get_manga_latest_chapter('manga_metadata', manga_obj.get_id())
+                        is_new_manga = existing_chapter is None
                         
-                        print(f"[Worker {worker_id}] Downloading chapters for {manga_obj.get_title()}")
-                        mangadex_helper.download_chapters(manga_obj)
+                        print(f"[Worker {worker_id}] Setting Latest Chapter")
+                        should_download = mangadex_helper.set_latest_chapters(manga_obj)
                         
-                        # Signal that S3 upload should happen
-                        s3_upload_queue.put(True)
-                    else:
-                        print(f"[Worker {worker_id}] No new chapters for {manga_obj.get_title()}, skipping download")
+                        # Record manga processing
+                        metrics.record_manga_processed(
+                            worker_id=worker_id,
+                            manga_title=manga_obj.get_title(),
+                            is_new=is_new_manga,
+                            has_new_chapters=should_download
+                        )
                         
-                    print(f"[Worker {worker_id}] Processed (or skipped); sleeping briefly")
+                        if should_download:
+                            print(f"[Worker {worker_id}] Inserting into Database")
+                            sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                            
+                            print(f"[Worker {worker_id}] Downloading chapters for {manga_obj.get_title()}")
+                            mangadex_helper.download_chapters(manga_obj)
+                            
+                            # Signal that S3 upload should happen
+                            s3_upload_queue.put(True)
+                        else:
+                            print(f"[Worker {worker_id}] No new chapters for {manga_obj.get_title()}, skipping download")
+                            
+                        print(f"[Worker {worker_id}] Processed (or skipped); sleeping briefly")
+                    
+                    finally:
+                        # Remove from processing set when done
+                        with processing_lock:
+                            processing_manga.discard(manga_id)
                     
                 except Exception as e:
                     metrics.record_error('api_errors')
