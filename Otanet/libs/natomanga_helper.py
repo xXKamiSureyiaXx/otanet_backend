@@ -52,7 +52,7 @@ class NatoMangaHelper:
     # Browser fetch  (all HTTP goes through here)
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _get_html(self, url: str, retries: int = 3) -> str | None:
+    def _get_html(self, url: str, retries: int = 3):
         """
         Navigate to *url* and return the page source as a string.
         Detects the Cloudflare challenge page and waits it out.
