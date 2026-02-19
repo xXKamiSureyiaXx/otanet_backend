@@ -47,7 +47,16 @@ class NatoMangaHelper:
         self.db          = SQLiteHelper()
         self.metrics     = MetricsCollector()
         from curl_cffi.requests import Session as CurlSession
-        self.session = CurlSession(impersonate="chrome120")
+        self.session = CurlSession(impersonate="chrome124")
+        self.session.headers.update({
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": "https://www.google.com/",
+            "sec-ch-ua": '"Google Chrome";v="124", "Chromium";v="124"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Linux"',
+        })
 
     # ─────────────────────────────────────────────────────────────────────────
     # Browser fetch  (all HTTP goes through here)
