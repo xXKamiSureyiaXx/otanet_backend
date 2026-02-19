@@ -160,7 +160,7 @@ class NatoMangaHelper:
     # Detail page parsing
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict | None:
+    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict:
         try:
             title_tag = (
                 soup.select_one("div.story-info-right h1")
@@ -270,7 +270,7 @@ class NatoMangaHelper:
         soup = BeautifulSoup(html, "html.parser")
         return self._parse_list_page(soup)
 
-    def get_requested_manga(self, manga_id: str) -> dict | None:
+    def get_requested_manga(self, manga_id: str) -> dict:
         slug = self._id_to_slug(manga_id)
         url = f"{BASE_URL}/manga/{slug}"
 
@@ -378,7 +378,7 @@ class NatoMangaHelper:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _store_chapter_pages(self, chapter_url, manga_id, manga_name,
-                             chapter_num, existing_pages) -> dict | None:
+                             chapter_num, existing_pages) -> dict:
         page_urls = self._get_chapter_page_urls(chapter_url)
         self.metrics.record_api_call("page_urls")
 
