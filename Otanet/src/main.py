@@ -324,7 +324,7 @@ for i in range(MANGADEX_WORKERS):
 print(f"Started {MANGADEX_WORKERS} MangaDex worker threads")
 
 # ── NatoManga worker (1 thread — single browser) ─────────────────────────────
-NATOMANGA_WORKERS = 3  # each gets its own Chrome
+NATOMANGA_WORKERS = 1  # each gets its own Chrome
 
 nato_browsers = []
 for i in range(NATOMANGA_WORKERS):
