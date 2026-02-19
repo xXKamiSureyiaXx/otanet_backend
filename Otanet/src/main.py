@@ -7,6 +7,8 @@ from queue import Queue
 from threading import Thread, Lock
 import random
 from pyvirtualdisplay import Display
+from seleniumbase import Driver
+import undetected_chromedriver as uc
 
 path = os.getcwd()
 parent_dir = os.path.abspath(os.path.join(path, os.pardir))
@@ -30,36 +32,31 @@ from dashboard import run_dashboard
 # ─────────────────────────────────────────────────────────────────────────────
 
 def init_browser():
-    import undetected_chromedriver as uc
+    
+    driver = Driver(
+        uc=True,
+        headless=False,
+        use_subprocess=True,
+        # user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ...",  # rotate if possible
+        # incognito=True,
+        # disable_csp=True,
+    )
 
-    display = Display(visible=0, size=(1920, 1080))
-    display.start()
-    print("[Browser] Virtual display started")
-
-    options = uc.ChromeOptions()
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-
-    driver = uc.Chrome(options=options)
-
-    # Warm up — let Cloudflare set its clearance cookies on the homepage
     print("[Browser] Warming up on NatoManga homepage...")
     driver.get("https://www.natomanga.com")
-    time.sleep(10)
+    driver.sleep(12)   # longer than before
 
-    deadline = time.time() + 60
-    while "Just a moment" in driver.title:
+    # Optional: wait until challenge disappears
+    deadline = time.time() + 90
+    while "Just a moment" in driver.title or "Verifying" in driver.page_source:
         if time.time() > deadline:
-            print("[Browser] WARNING: Still on CF challenge page after warmup")
+            print("[Browser] Timeout waiting for Cloudflare clearance")
             break
-        print("[Browser] Waiting for CF challenge to clear...")
-        time.sleep(3)
+        print("[Browser] Still waiting for CF clearance...")
+        driver.sleep(4)
 
-    print(f"[Browser] Warmup complete – page title: {driver.title}")
-
-    driver_lock = Lock()
+    print(f"[Browser] Warmup finished – title: {driver.title}")
+    driver_lock = threading.Lock()
     return driver, driver_lock
 
 
