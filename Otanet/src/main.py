@@ -29,46 +29,29 @@ from dashboard import run_dashboard
 # ─────────────────────────────────────────────────────────────────────────────
 
 def init_browser():
-    """
-    Start pyvirtualdisplay (Linux) or minimized Chrome (Windows/Mac),
-    then return (driver, driver_lock).
-    """
     import undetected_chromedriver as uc
 
-    IS_LINUX = platform.system() == "Linux"
-
-    if IS_LINUX:
+    if platform.system() == "Linux":
         try:
             from pyvirtualdisplay import Display
             display = Display(visible=0, size=(1920, 1080))
             display.start()
-            print("[Browser] Virtual display started (Linux)")
+            print("[Browser] Virtual display started")
         except Exception as exc:
-            print(f"[Browser] pyvirtualdisplay failed ({exc}), continuing without it")
+            print(f"[Browser] pyvirtualdisplay failed ({exc})")
 
     options = uc.ChromeOptions()
-
-    options = uc.ChromeOptions()
-
-    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    options.add_argument("--disable-software-rasterizer")
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--single-process")
-    options.add_argument("--no-zygote")
+    # removed: --headless=new, --single-process, --no-zygote
+
+    driver = uc.Chrome(options=options, headless=False)
 
     if platform.system() == "Linux":
         options.binary_location = "/usr/bin/google-chrome"
         options.add_argument("--headless=new")
-
-    driver = uc.Chrome(options=options, headless=False)
-
-
-    if not IS_LINUX:
-        driver.minimize_window()
-        print("[Browser] Chrome started (minimized)")
 
     # Warm up — let Cloudflare set its clearance cookies on the homepage
     print("[Browser] Warming up on NatoManga homepage...")
