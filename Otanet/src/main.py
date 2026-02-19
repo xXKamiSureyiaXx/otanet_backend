@@ -47,7 +47,7 @@ def init_browser():
     options.add_argument("--window-size=1920,1080")
     # removed: --headless=new, --single-process, --no-zygote
 
-    driver = uc.Chrome(options=options, headless=False)
+    driver = uc.Chrome(options=options, headless=True, version_main=145)
 
     if platform.system() == "Linux":
         options.binary_location = "/usr/bin/google-chrome"
