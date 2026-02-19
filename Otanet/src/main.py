@@ -6,6 +6,7 @@ import threading
 from queue import Queue
 from threading import Thread, Lock
 import random
+from pyvirtualdisplay import Display
 
 path = os.getcwd()
 parent_dir = os.path.abspath(os.path.join(path, os.pardir))
@@ -31,30 +32,22 @@ from dashboard import run_dashboard
 def init_browser():
     import undetected_chromedriver as uc
 
-    if platform.system() == "Linux":
-        try:
-            from pyvirtualdisplay import Display
-            display = Display(visible=0, size=(1920, 1080))
-            display.start()
-            print("[Browser] Virtual display started")
-        except Exception as exc:
-            print(f"[Browser] pyvirtualdisplay failed ({exc})")
-    os.environ["DISPLAY"] = ":99"
+    display = Display(visible=0, size=(1920, 1080))
+    display.start()
+    print("[Browser] Virtual display started")
+
     options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    # removed: --headless=new, --single-process, --no-zygote
 
-    driver = uc.Chrome(
-                options=options,
-                headless=False,
-                driver_executable_path="/usr/local/bin/chromedriver")
+    driver = uc.Chrome(options=options)
+
     # Warm up — let Cloudflare set its clearance cookies on the homepage
     print("[Browser] Warming up on NatoManga homepage...")
     driver.get("https://www.natomanga.com")
-    time.sleep(5)
+    time.sleep(10)
 
     deadline = time.time() + 60
     while "Just a moment" in driver.title:
@@ -172,7 +165,7 @@ def natomanga_worker(offset_queue, s3_upload_queue, driver, driver_lock):
     All browser navigation is serialized through driver_lock inside
     NatoMangaHelper._get_html(), so this thread is the only consumer.
     """
-    helper        = NatoMangaHelper()
+    helper = NatoMangaHelper(driver, driver_lock)
     sqlite_helper = SQLiteHelper()
     metrics       = MetricsCollector()
 

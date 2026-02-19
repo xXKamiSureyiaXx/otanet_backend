@@ -36,28 +36,12 @@ FEEDS = {
 
 class NatoMangaHelper:
 
-    def __init__(self):
-        """
-        Args:
-            driver:      A live undetected_chromedriver.Chrome instance.
-            driver_lock: Threading lock — callers must hold this when the
-                         driver is in use since selenium is not thread-safe.
-        """
-
-        self.db          = SQLiteHelper()
-        self.metrics     = MetricsCollector()
-        from curl_cffi.requests import Session as CurlSession
-        self.session = CurlSession(impersonate="chrome124")
-        self.session.headers.update({
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Referer": "https://www.google.com/",
-            "sec-ch-ua": '"Google Chrome";v="124", "Chromium";v="124"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Linux"',
-        })
-
+    def __init__(self, driver, driver_lock):
+        self.driver = driver
+        self.driver_lock = driver_lock
+        self.db = SQLiteHelper()
+        self.metrics = MetricsCollector()
+        
     # ─────────────────────────────────────────────────────────────────────────
     # Browser fetch  (all HTTP goes through here)
     # ─────────────────────────────────────────────────────────────────────────
@@ -65,17 +49,20 @@ class NatoMangaHelper:
     def _get_html(self, url: str, retries: int = 3):
         for attempt in range(retries):
             try:
-                resp = self.session.get(url, timeout=20)
-                if resp.status_code == 200:
-                    return resp.text
-                print(f"[NatoManga] HTTP {resp.status_code} on {url}")
+                with self.driver_lock:
+                    self.driver.get(url)
+                    time.sleep(random.uniform(3, 6))  # let Cloudflare settle
+                    return self.driver.page_source
+
             except Exception as exc:
                 wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"[NatoManga] Error ({exc}) – retrying in {wait:.1f}s")
+                print(f"[NatoManga] Browser error ({exc}) – retrying in {wait:.1f}s")
                 self.metrics.record_error("api_errors")
                 time.sleep(wait)
+
         print(f"[NatoManga] Gave up after {retries} attempts: {url}")
         return None
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # Text helpers
