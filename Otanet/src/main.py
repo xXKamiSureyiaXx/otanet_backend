@@ -47,6 +47,7 @@ def init_browser():
             print(f"[Browser] pyvirtualdisplay failed ({exc}), continuing without it")
 
     options = uc.ChromeOptions()
+
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -54,6 +55,7 @@ def init_browser():
 
     if platform.system() == "Linux":
         options.binary_location = "/usr/bin/google-chrome"
+        options.add_argument("--headless=new")
 
     driver = uc.Chrome(options=options, headless=False)
 
@@ -309,10 +311,6 @@ print("Dashboard available at http://localhost:5000")
 
 sqlite_helper = SQLiteHelper()
 sqlite_helper.create_metadata_table("manga_metadata")
-
-# ── Browser init (must happen before NatoManga worker starts) ─────────────────
-print("Initialising browser for NatoManga...")
-nato_driver, nato_driver_lock = init_browser()
 
 # ── Queues ────────────────────────────────────────────────────────────────────
 mangadex_queue  = Queue()
