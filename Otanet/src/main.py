@@ -52,7 +52,11 @@ def init_browser():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
 
+    if platform.system() == "Linux":
+        options.binary_location = "/usr/bin/google-chrome"
+
     driver = uc.Chrome(options=options, headless=False)
+
 
     if not IS_LINUX:
         driver.minimize_window()
