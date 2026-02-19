@@ -54,40 +54,17 @@ class NatoMangaHelper:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _get_html(self, url: str, retries: int = 3):
-        print(f"[Debug] Session type: {type(self.session)}")
-        """
-        Navigate to *url* and return the page source as a string.
-        Detects the Cloudflare challenge page and waits it out.
-        The driver_lock is acquired for the full duration of the request.
-        """
         for attempt in range(retries):
             try:
-                self.driver.get(url)
-                time.sleep(8)  # initial settle
-
-                print(f"[NatoManga] Page title: {self.driver.title}")
-                print(f"[NatoManga] Page URL: {self.driver.current_url}")
-
-                # Wait out Cloudflare challenge if present
-                deadline = time.time() + 20
-                while "Just a moment" in self.driver.title:
-                    if time.time() > deadline:
-                        print(f"[NatoManga] CF challenge timed out on {url}")
-                        break
-                    time.sleep(2)
-
-                if "Just a moment" in self.driver.title:
-                    print(f"[NatoManga] Still on CF page, attempt {attempt + 1}/{retries}")
-                    continue
-
-                return self.driver.page_source
-
+                resp = self.session.get(url, timeout=20)
+                if resp.status_code == 200:
+                    return resp.text
+                print(f"[NatoManga] HTTP {resp.status_code} on {url}")
             except Exception as exc:
                 wait = 2 ** attempt + random.uniform(0, 2)
                 print(f"[NatoManga] Error ({exc}) – retrying in {wait:.1f}s")
                 self.metrics.record_error("api_errors")
                 time.sleep(wait)
-
         print(f"[NatoManga] Gave up after {retries} attempts: {url}")
         return None
 
