@@ -39,7 +39,7 @@ def init_browser():
             print("[Browser] Virtual display started")
         except Exception as exc:
             print(f"[Browser] pyvirtualdisplay failed ({exc})")
-
+    os.environ["DISPLAY"] = ":99"
     options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
@@ -47,18 +47,16 @@ def init_browser():
     options.add_argument("--window-size=1920,1080")
     # removed: --headless=new, --single-process, --no-zygote
 
-    driver = uc.Chrome(options=options, headless=True, version_main=145)
-
-    if platform.system() == "Linux":
-        options.binary_location = "/usr/bin/google-chrome"
-        options.add_argument("--headless=new")
-
+    driver = uc.Chrome(
+                options=options,
+                headless=False,
+                driver_executable_path="/usr/local/bin/chromedriver")
     # Warm up — let Cloudflare set its clearance cookies on the homepage
     print("[Browser] Warming up on NatoManga homepage...")
     driver.get("https://www.natomanga.com")
     time.sleep(5)
 
-    deadline = time.time() + 30
+    deadline = time.time() + 60
     while "Just a moment" in driver.title:
         if time.time() > deadline:
             print("[Browser] WARNING: Still on CF challenge page after warmup")
@@ -174,7 +172,7 @@ def natomanga_worker(offset_queue, s3_upload_queue, driver, driver_lock):
     All browser navigation is serialized through driver_lock inside
     NatoMangaHelper._get_html(), so this thread is the only consumer.
     """
-    helper        = NatoMangaHelper(driver, driver_lock)
+    helper        = NatoMangaHelper()
     sqlite_helper = SQLiteHelper()
     metrics       = MetricsCollector()
 
@@ -313,7 +311,7 @@ s3_thread.start()
 print("Started S3 upload thread")
 
 # ── MangaDex workers (4 threads) ──────────────────────────────────────────────
-MANGADEX_WORKERS = 4
+MANGADEX_WORKERS = 0
 mangadex_threads = []
 for i in range(MANGADEX_WORKERS):
     t = Thread(target=mangadex_worker,
