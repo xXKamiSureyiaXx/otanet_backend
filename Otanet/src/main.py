@@ -301,7 +301,7 @@ s3_thread.start()
 print("Started S3 upload thread")
 
 # ── MangaDex workers (4 threads) ──────────────────────────────────────────────
-MANGADEX_WORKERS = 0
+MANGADEX_WORKERS = 4
 mangadex_threads = []
 for i in range(MANGADEX_WORKERS):
     t = Thread(target=mangadex_worker,
@@ -312,7 +312,7 @@ for i in range(MANGADEX_WORKERS):
 print(f"Started {MANGADEX_WORKERS} MangaDex worker threads")
 
 # ── NatoManga worker (1 thread — single browser) ─────────────────────────────
-NATOMANGA_WORKERS = 1  # each gets its own Chrome
+NATOMANGA_WORKERS = 0  # each gets its own Chrome
 
 nato_browsers = []
 for i in range(NATOMANGA_WORKERS):
@@ -359,7 +359,7 @@ while True:
 
         # NatoManga offset (one page per cycle — browser is slow)
         nm_offset = ((nm_cycle_offset) % (NATOMANGA_MAX_OFFSET // 24)) * 24
-        natomanga_queue.put(nm_offset)
+        #natomanga_queue.put(nm_offset)
         print(f"[Main] NatoManga offset queued: {nm_offset}")
         nm_cycle_offset += 1
 
