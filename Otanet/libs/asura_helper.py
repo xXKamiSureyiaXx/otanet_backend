@@ -17,7 +17,7 @@ from metrics_collector import MetricsCollector
 #   get_recent_manga(offset)      -> list[dict]
 #   get_requested_manga(manga_id) -> dict | None
 #   set_latest_chapters(manga)    -> bool
-#   download_chapters(manga)      -> None
+#   download_chapters(manga)     
 #
 # ID / Hash strategy
 # ──────────────────
@@ -373,7 +373,7 @@ class AsuraComicHelper:
 
         return should_download
 
-    def download_chapters(self, manga) -> None:
+    def download_chapters(self, manga):
         """
         Iterate chapters and store only missing pages to the DB.
         Matches MangaDexHelper.download_chapters() contract exactly.
@@ -483,7 +483,7 @@ class AsuraComicHelper:
         chapter_num: str,
         page_number: int,
         page_url: str,
-    ) -> None:
+    ):
         try:
             self.db.store_page_url(
                 manga_id=manga_id,
