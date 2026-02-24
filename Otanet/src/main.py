@@ -1,13 +1,10 @@
 import os
 import sys
 import time
-import platform
 import threading
 from queue import Queue
 from threading import Thread, Lock
 import random
-from pyvirtualdisplay import Display
-from seleniumbase import Driver
 
 path = os.getcwd()
 parent_dir = os.path.abspath(os.path.join(path, os.pardir))
@@ -23,39 +20,6 @@ from dashboard import run_dashboard
 ##################################
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Browser setup
-# pyvirtualdisplay is Linux-only; on Windows the browser window will be visible.
-# undetected-chromedriver (via seleniumbase) is used for all AsuraComic requests.
-# A single driver + lock is shared across the pipeline — selenium is not
-# thread-safe so only one AsuraComic worker thread is ever active per browser.
-# ─────────────────────────────────────────────────────────────────────────────
-
-def init_browser():
-    driver = Driver(
-        uc=True,
-        headless=False,
-        use_subprocess=True,
-    )
-
-    print("[Browser] Warming up on AsuraComic homepage...")
-    driver.get("https://asuracomic.net")
-    driver.sleep(12)
-
-    # Wait for any Cloudflare / bot-challenge to clear
-    deadline = time.time() + 90
-    while "Just a moment" in driver.title or "Verifying" in driver.page_source:
-        if time.time() > deadline:
-            print("[Browser] Timeout waiting for Cloudflare clearance")
-            break
-        print("[Browser] Still waiting for CF clearance...")
-        driver.sleep(4)
-
-    print(f"[Browser] Warmup finished – title: {driver.title}")
-    driver_lock = threading.Lock()
-    return driver, driver_lock
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Global tracking for concurrent manga processing
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -64,15 +28,63 @@ processing_lock  = Lock()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MangaDex worker  (unchanged)
+# Generic worker factory
+# Both MangaDex and AsuraComic workers follow the exact same logic; the only
+# difference is the helper instance that is passed in.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _process_manga_list(manga_list, helper, sqlite_helper, metrics, worker_label, s3_upload_queue):
+    """Shared inner loop: process a list of manga dicts from any source."""
+    for manga in manga_list:
+        try:
+            manga_obj = MangaFactory(manga)
+            manga_id  = manga_obj.get_id()
+
+            with processing_lock:
+                if manga_id in processing_manga:
+                    continue
+                processing_manga.add(manga_id)
+
+            try:
+                existing_chapter = sqlite_helper.get_manga_latest_chapter(
+                    "manga_metadata", manga_obj.get_id()
+                )
+                is_new_manga    = existing_chapter is None
+                should_download = helper.set_latest_chapters(manga_obj)
+
+                metrics.record_manga_processed(
+                    worker_id=worker_label,
+                    manga_title=manga_obj.get_title(),
+                    is_new=is_new_manga,
+                    has_new_chapters=should_download,
+                )
+
+                if should_download:
+                    sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
+                    helper.download_chapters(manga_obj)
+                    s3_upload_queue.put(True)
+                else:
+                    print(f"[{worker_label}] No new chapters for '{manga_obj.get_title()}'")
+            finally:
+                with processing_lock:
+                    processing_manga.discard(manga_id)
+
+        except Exception as exc:
+            metrics.record_error("api_errors")
+            print(f"[{worker_label}] Error processing manga: {exc}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MangaDex worker
 # ─────────────────────────────────────────────────────────────────────────────
 
 def mangadex_worker(worker_id, offset_queue, s3_upload_queue):
     helper        = MangaDexHelper()
     sqlite_helper = SQLiteHelper()
     metrics       = MetricsCollector()
+    label         = f"Worker MD-{worker_id}"
 
-    print(f"[Worker MD-{worker_id}] Started")
+    print(f"[{label}] Started")
 
     while True:
         try:
@@ -83,155 +95,82 @@ def mangadex_worker(worker_id, offset_queue, s3_upload_queue):
                 offset_queue.task_done()
                 break
 
-            print(f"[Worker MD-{worker_id}] Processing offset {offset}")
+            print(f"[{label}] Processing offset {offset}")
 
             try:
                 manga_list = helper.get_recent_manga(offset)
                 metrics.record_api_call("manga_list")
             except Exception as exc:
                 metrics.record_error("api_errors")
-                print(f"[Worker MD-{worker_id}] Error fetching list: {exc}")
+                print(f"[{label}] Error fetching list: {exc}")
                 offset_queue.task_done()
                 continue
 
-            for manga in manga_list:
-                try:
-                    manga_obj = MangaFactory(manga)
-                    manga_id  = manga_obj.get_id()
-
-                    with processing_lock:
-                        if manga_id in processing_manga:
-                            continue
-                        processing_manga.add(manga_id)
-
-                    try:
-                        existing_chapter = sqlite_helper.get_manga_latest_chapter(
-                            "manga_metadata", manga_obj.get_id()
-                        )
-                        is_new_manga     = existing_chapter is None
-                        should_download  = helper.set_latest_chapters(manga_obj)
-
-                        metrics.record_manga_processed(
-                            worker_id=worker_id,
-                            manga_title=manga_obj.get_title(),
-                            is_new=is_new_manga,
-                            has_new_chapters=should_download,
-                        )
-
-                        if should_download:
-                            sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
-                            helper.download_chapters(manga_obj)
-                            s3_upload_queue.put(True)
-                        else:
-                            print(f"[Worker MD-{worker_id}] No new chapters for "
-                                  f"'{manga_obj.get_title()}'")
-                    finally:
-                        with processing_lock:
-                            processing_manga.discard(manga_id)
-
-                except Exception as exc:
-                    metrics.record_error("api_errors")
-                    print(f"[Worker MD-{worker_id}] Error: {exc}")
-
+            _process_manga_list(manga_list, helper, sqlite_helper, metrics, label, s3_upload_queue)
             offset_queue.task_done()
 
         except Exception as exc:
             if "429" in str(exc) or "403" in str(exc):
-                print(f"[Worker MD-{worker_id}] Rate limited – sleeping 60s")
+                print(f"[{label}] Rate limited – sleeping 60s")
                 metrics.record_error("rate_limits")
                 time.sleep(60)
             else:
-                print(f"[Worker MD-{worker_id}] Error: {exc}")
+                print(f"[{label}] Error: {exc}")
                 metrics.record_error("api_errors")
                 time.sleep(5)
             offset_queue.task_done()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AsuraComic worker  (single thread per browser – Selenium is not thread-safe)
+# AsuraComic worker
+# Uses plain requests – no browser, no lock, safe to run multiple threads.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def asura_worker(offset_queue, s3_upload_queue, driver, driver_lock):
-    """
-    Single-threaded worker for AsuraComic.
-    All browser navigation is serialised through driver_lock inside
-    AsuraComicHelper._get_html(), so this thread is the only consumer per browser.
-    """
-    helper        = AsuraComicHelper(driver, driver_lock)
+def asura_worker(worker_id, offset_queue, s3_upload_queue):
+    helper        = AsuraComicHelper()
     sqlite_helper = SQLiteHelper()
     metrics       = MetricsCollector()
+    label         = f"Worker AS-{worker_id}"
 
-    print("[Worker AS] Started")
+    print(f"[{label}] Started")
 
     while True:
         try:
             offset = offset_queue.get()
-            time.sleep(random.uniform(2, 8.0))
+            time.sleep(random.uniform(1, 5.0))
 
             if offset is None:
                 offset_queue.task_done()
                 break
 
-            print(f"[Worker AS] Processing offset {offset}")
+            print(f"[{label}] Processing offset {offset}")
 
             try:
                 manga_list = helper.get_recent_manga(offset)
                 metrics.record_api_call("manga_list")
             except Exception as exc:
                 metrics.record_error("api_errors")
-                print(f"[Worker AS] Error fetching list: {exc}")
+                print(f"[{label}] Error fetching list: {exc}")
                 offset_queue.task_done()
                 continue
 
-            for manga in manga_list:
-                try:
-                    manga_obj = MangaFactory(manga)
-                    manga_id  = manga_obj.get_id()
-
-                    with processing_lock:
-                        if manga_id in processing_manga:
-                            continue
-                        processing_manga.add(manga_id)
-
-                    try:
-                        existing_chapter = sqlite_helper.get_manga_latest_chapter(
-                            "manga_metadata", manga_obj.get_id()
-                        )
-                        is_new_manga    = existing_chapter is None
-                        should_download = helper.set_latest_chapters(manga_obj)
-
-                        metrics.record_manga_processed(
-                            worker_id="AS",
-                            manga_title=manga_obj.get_title(),
-                            is_new=is_new_manga,
-                            has_new_chapters=should_download,
-                        )
-
-                        if should_download:
-                            sqlite_helper.insert_manga_metadata("manga_metadata", manga_obj)
-                            helper.download_chapters(manga_obj)
-                            s3_upload_queue.put(True)
-                        else:
-                            print(f"[Worker AS] No new chapters for '{manga_obj.get_title()}'")
-                    finally:
-                        with processing_lock:
-                            processing_manga.discard(manga_id)
-
-                except Exception as exc:
-                    metrics.record_error("api_errors")
-                    print(f"[Worker AS] Error: {exc}")
-
+            _process_manga_list(manga_list, helper, sqlite_helper, metrics, label, s3_upload_queue)
             offset_queue.task_done()
 
         except Exception as exc:
-            print(f"[Worker AS] Error: {exc}")
-            metrics.record_error("api_errors")
-            time.sleep(5)
+            if "429" in str(exc):
+                print(f"[{label}] Rate limited – sleeping 60s")
+                metrics.record_error("rate_limits")
+                time.sleep(60)
+            else:
+                print(f"[{label}] Error: {exc}")
+                metrics.record_error("api_errors")
+                time.sleep(5)
             offset_queue.task_done()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# S3 upload thread  (unchanged)
+# S3 upload thread
 # ─────────────────────────────────────────────────────────────────────────────
 
 def s3_upload_thread(s3_upload_queue):
@@ -285,8 +224,8 @@ sqlite_helper = SQLiteHelper()
 sqlite_helper.create_metadata_table("manga_metadata")
 
 # ── Queues ────────────────────────────────────────────────────────────────────
-mangadex_queue = Queue()
-asura_queue    = Queue()
+mangadex_queue  = Queue()
+asura_queue     = Queue()
 s3_upload_queue = Queue()
 
 # ── S3 upload thread ──────────────────────────────────────────────────────────
@@ -295,47 +234,37 @@ s3_thread.daemon = True
 s3_thread.start()
 print("Started S3 upload thread")
 
-# ── MangaDex workers (4 threads) ──────────────────────────────────────────────
+# ── MangaDex workers ──────────────────────────────────────────────────────────
 MANGADEX_WORKERS = 4
 mangadex_threads = []
 for i in range(MANGADEX_WORKERS):
-    t = Thread(target=mangadex_worker,
-               args=(i, mangadex_queue, s3_upload_queue))
+    t = Thread(target=mangadex_worker, args=(i, mangadex_queue, s3_upload_queue))
     t.daemon = True
     t.start()
     mangadex_threads.append(t)
 print(f"Started {MANGADEX_WORKERS} MangaDex worker threads")
 
-# ── AsuraComic workers (1 thread per browser, browser-driven) ─────────────────
-ASURA_WORKERS = 1   # increase only if you have multiple proxied browsers
-
-asura_browsers = []
-for i in range(ASURA_WORKERS):
-    print(f"[Browser] Starting AsuraComic browser {i + 1}/{ASURA_WORKERS}...")
-    driver, lock = init_browser()
-    asura_browsers.append((driver, lock))
-    time.sleep(3)   # stagger browser startup
-
+# ── AsuraComic workers (requests-based, safe to multithread) ──────────────────
+ASURA_WORKERS = 2
 asura_threads = []
-for driver, lock in asura_browsers:
-    t = Thread(target=asura_worker,
-               args=(asura_queue, s3_upload_queue, driver, lock))
+for i in range(ASURA_WORKERS):
+    t = Thread(target=asura_worker, args=(i, asura_queue, s3_upload_queue))
     t.daemon = True
     t.start()
     asura_threads.append(t)
-print(f"Started {ASURA_WORKERS} AsuraComic worker thread(s)")
+print(f"Started {ASURA_WORKERS} AsuraComic worker threads")
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 MANGADEX_MAX_OFFSET = 4000
-ASURA_MAX_OFFSET    = 20 * 100    # 100 pages × 20 items
+ASURA_MAX_OFFSET    = 20 * 100   # 100 pages × 20 items
 CYCLE_SLEEP         = 5 * 60
 
 print("\n" + "=" * 60)
 print("Multi-Source Manga Scraper Started!")
 print("=" * 60)
 print(f"Dashboard         : http://localhost:5000")
-print(f"MangaDex workers  : {MANGADEX_WORKERS}  (offsets 0-{MANGADEX_MAX_OFFSET})")
-print(f"AsuraComic workers: {ASURA_WORKERS}  (offsets 0-{ASURA_MAX_OFFSET}, browser-driven)")
+print(f"MangaDex workers  : {MANGADEX_WORKERS}  (offsets 0–{MANGADEX_MAX_OFFSET})")
+print(f"AsuraComic workers: {ASURA_WORKERS}  (offsets 0–{ASURA_MAX_OFFSET})")
 print("=" * 60 + "\n")
 
 md_cycle_offset    = 0
@@ -352,12 +281,14 @@ while True:
             print(f"[Main] MangaDex offset queued: {offset}")
         md_cycle_offset += MANGADEX_WORKERS - 1
 
-        # ── AsuraComic offset (one listing page per cycle) ────────────────────
-        asura_offset = (
-            (asura_cycle_offset % (ASURA_MAX_OFFSET // 20)) * 20
-        )
-        asura_queue.put(asura_offset)
-        print(f"[Main] AsuraComic offset queued: {asura_offset}")
+        # ── AsuraComic offsets (one per worker per cycle) ─────────────────────
+        for i in range(ASURA_WORKERS):
+            asura_offset = (
+                ((asura_cycle_offset + i) % (ASURA_MAX_OFFSET // ASURA_WORKERS))
+                * ASURA_WORKERS * 20
+            )
+            asura_queue.put(asura_offset)
+            print(f"[Main] AsuraComic offset queued: {asura_offset}")
         asura_cycle_offset += 1
 
         print(f"[Main] Sleeping {CYCLE_SLEEP // 60} minutes")
@@ -377,13 +308,6 @@ while True:
 
         for t in mangadex_threads + asura_threads:
             t.join()
-
-        print("[Main] Closing browser(s)...")
-        for driver, _ in asura_browsers:
-            try:
-                driver.quit()
-            except Exception:
-                pass
 
         metrics.shutdown()
         print("[Main] Shutdown complete")
