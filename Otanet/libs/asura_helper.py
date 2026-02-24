@@ -246,7 +246,7 @@ class AsuraComicHelper:
                 continue
             seen_nums.add(ch_num)
 
-            full_url = href if href.startswith("http") else f"{BASE_URL}{href}"
+            full_url = href if href.startswith("http") else f"{BASE_URL}/{href.lstrip('/')}"
             chapters.append({
                 "id":         full_url,
                 "attributes": {"chapter": ch_num},
