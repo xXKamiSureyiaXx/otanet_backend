@@ -26,7 +26,7 @@ class SQLiteHelper:
         return should_insert
 
     def create_metadata_table(self, table_name):
-        """Create the manga metadata table if it doesn't exist"""
+        """Create the manga metadata table if it doesn't exist, and migrate any missing columns."""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -41,6 +41,22 @@ class SQLiteHelper:
                     time DATETIME DEFAULT CURRENT_TIMESTAMP
                 );"""
             cursor.execute(create_table_query)
+
+            # Migration: add any columns that may be missing from older table versions
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            existing_columns = {row[1] for row in cursor.fetchall()}
+            migrations = {
+                "cover_img":      "ALTER TABLE {t} ADD COLUMN cover_img TEXT",
+                "description":    "ALTER TABLE {t} ADD COLUMN description TEXT",
+                "tags":           "ALTER TABLE {t} ADD COLUMN tags TEXT",
+                "latest_chapter": "ALTER TABLE {t} ADD COLUMN latest_chapter REAL",
+                "time":           "ALTER TABLE {t} ADD COLUMN time DATETIME DEFAULT CURRENT_TIMESTAMP",
+            }
+            for col, ddl in migrations.items():
+                if col not in existing_columns:
+                    cursor.execute(ddl.format(t=table_name))
+                    print(f"[Migration] Added column '{col}' to {table_name}")
+
             conn.close()
             print(f"Table {table_name} created or already exists")
         except sqlite3.Error as e:
