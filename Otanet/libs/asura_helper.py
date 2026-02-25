@@ -334,28 +334,36 @@ class AsuraComicHelper:
 
         soup = BeautifulSoup(html, "html.parser")
 
-        # Primary: pages are <img alt="chapter page N"> inside <div class="w-full mx-auto center">
-        images = (
-            soup.select("img[alt^='chapter page']")
-            or soup.select("div.center img")
-            or soup.select("div#chapter-container img")
-            or soup.select("div.chapter-content img")
-            or soup.select("div.reading-content img")
-        )
-
         seen: set       = set()
         urls: list[str] = []
-        for img in images:
-            src = (
-                img.get("src") or img.get("data-src") or img.get("data-lazy-src") or ""
-            ).strip()
-            if src.startswith("http") and src not in seen:
-                seen.add(src)
-                urls.append(src)
 
-        # Fallback – any image served from the Asura CDN (gg.asuracomic.net)
+        def _collect(imgs):
+            for img in imgs:
+                src = (
+                    img.get("src") or img.get("data-src") or img.get("data-lazy-src") or ""
+                ).strip()
+                if src.startswith("http") and src not in seen:
+                    seen.add(src)
+                    urls.append(src)
+
+        # Strategy 1 – structure-based: every chapter page lives in
+        #   <div class="w-full mx-auto center"><img ...></div>
+        # This is the most reliable selector and catches all pages regardless
+        # of alt text, which varies across chapters.
+        _collect(soup.select("div.center img"))
+
+        # Strategy 2 – alt-text pattern (catches any missed by strategy 1)
         if not urls:
+            _collect(soup.select("img[alt^='chapter page']"))
+
+        # Strategy 3 – CDN domain fallback, but exclude known non-page images
+        # (cover thumbnails from related-series sections use the same CDN)
+        if not urls:
+            NON_PAGE_ALTS = {"end page", "poster", ""}
             for img in soup.select("img[src*='gg.asuracomic.net']"):
+                alt = (img.get("alt") or "").strip().lower()
+                if alt in NON_PAGE_ALTS:
+                    continue
                 src = (img.get("src") or "").strip()
                 if src.startswith("http") and src not in seen:
                     seen.add(src)
@@ -455,7 +463,7 @@ class AsuraComicHelper:
 
         return should_download
 
-    def download_chapters(self, manga):
+    def download_chapters(self, manga) -> None:
         """
         Iterate chapters and store only missing pages to the DB.
         The page-URL table is named after the manga hash (manga.get_id()).
