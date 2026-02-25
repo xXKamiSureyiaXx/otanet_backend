@@ -3,9 +3,12 @@ import time
 import random
 import threading
 import requests
+import nest_asyncio
+from requests_html import HTMLSession
 from bs4 import BeautifulSoup
 from sqlite_helper import SQLiteHelper
 from metrics_collector import MetricsCollector
+nest_asyncio.apply()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AsuraComicHelper
@@ -328,49 +331,46 @@ class AsuraComicHelper:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _get_chapter_page_urls(self, chapter_url: str) -> list[str]:
-        html = self._get_html(chapter_url)
-        if not html:
-            return []
+        print(f"[AsuraComic] Rendering chapter with Pyppeteer: {chapter_url}")
 
-        soup = BeautifulSoup(html, "html.parser")
+        session = HTMLSession()
 
-        seen: set       = set()
-        urls: list[str] = []
+        try:
+            r = session.get(chapter_url, timeout=20)
 
-        def _collect(imgs):
+            # Execute JavaScript and wait for images
+            r.html.render(
+                timeout=30,
+                sleep=3,          # allow lazy-load to complete
+                scrolldown=5      # trigger lazy loading
+            )
+
+            imgs = r.html.find("div.center img")
+
+            seen: set = set()
+            urls: list[str] = []
+
             for img in imgs:
                 src = (
-                    img.get("src") or img.get("data-src") or img.get("data-lazy-src") or ""
+                    img.attrs.get("src")
+                    or img.attrs.get("data-src")
+                    or img.attrs.get("data-lazy-src")
+                    or ""
                 ).strip()
+
                 if src.startswith("http") and src not in seen:
                     seen.add(src)
                     urls.append(src)
 
-        # Strategy 1 – structure-based: every chapter page lives in
-        #   <div class="w-full mx-auto center"><img ...></div>
-        # This is the most reliable selector and catches all pages regardless
-        # of alt text, which varies across chapters.
-        _collect(soup.select("div.center img"))
+            print(f"[AsuraComic] Found {len(urls)} page URLs in {chapter_url}")
+            return urls
 
-        # Strategy 2 – alt-text pattern (catches any missed by strategy 1)
-        if not urls:
-            _collect(soup.select("img[alt^='chapter page']"))
+        except Exception as exc:
+            print(f"[AsuraComic] Pyppeteer render error: {exc}")
+            return []
 
-        # Strategy 3 – CDN domain fallback, but exclude known non-page images
-        # (cover thumbnails from related-series sections use the same CDN)
-        if not urls:
-            NON_PAGE_ALTS = {"end page", "poster", ""}
-            for img in soup.select("img[src*='gg.asuracomic.net']"):
-                alt = (img.get("alt") or "").strip().lower()
-                if alt in NON_PAGE_ALTS:
-                    continue
-                src = (img.get("src") or "").strip()
-                if src.startswith("http") and src not in seen:
-                    seen.add(src)
-                    urls.append(src)
-
-        print(f"[AsuraComic] Found {len(urls)} page URLs in {chapter_url}")
-        return urls
+        finally:
+            session.close()
 
     # ─────────────────────────────────────────────────────────────────────────
     # Public API  (mirrors MangaDexHelper)
