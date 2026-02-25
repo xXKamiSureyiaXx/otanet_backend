@@ -15,7 +15,7 @@ from metrics_collector import MetricsCollector
 #
 # Public interface (mirrors MangaDexHelper exactly):
 #   get_recent_manga(offset)      -> list[dict]
-#   get_requested_manga(manga_id) -> dict | None
+#   get_requested_manga(manga_id) -> dict
 #   set_latest_chapters(manga)    -> bool
 #   download_chapters(manga)      -> None
 #
@@ -75,7 +75,7 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().replace("\x00", "")
 
 
-def _slug_from_url(href: str) -> str | None:
+def _slug_from_url(href: str) -> str:
     """Extract the series slug from any AsuraComic series URL."""
     m = re.search(r"/series/([^/?#]+)", href)
     return m.group(1) if m else None
@@ -95,7 +95,7 @@ class AsuraComicHelper:
     # HTTP fetch
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _get_html(self, url: str, retries: int = 4) -> str | None:
+    def _get_html(self, url: str, retries: int = 4) -> str:
         for attempt in range(retries):
             try:
                 resp = _SESSION.get(url, timeout=30)
@@ -127,7 +127,7 @@ class AsuraComicHelper:
     # Slug lookup (needed because the hash no longer embeds the slug)
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _slug_for(self, manga_id: str) -> str | None:
+    def _slug_for(self, manga_id: str) -> str:
         slug = self._slug_map.get(manga_id)
         if not slug:
             print(f"[AsuraComic] WARNING: no slug cached for {manga_id}")
@@ -194,7 +194,7 @@ class AsuraComicHelper:
     # Detail page  –  /series/<slug>
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict | None:
+    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict:
         try:
             # ── Title ─────────────────────────────────────────────────────────
             # <span class="text-xl font-bold">...</span>
@@ -346,7 +346,7 @@ class AsuraComicHelper:
         soup = BeautifulSoup(html, "html.parser")
         return self._parse_list_page(soup)
 
-    def get_requested_manga(self, manga_id: str) -> dict | None:
+    def get_requested_manga(self, manga_id: str) -> dict:
         slug = self._slug_for(manga_id)
         if not slug:
             return None
@@ -485,7 +485,7 @@ class AsuraComicHelper:
         manga_name: str,
         chapter_num: str,
         existing_pages: set,
-    ) -> dict | None:
+    ) -> dict:
         page_urls = self._get_chapter_page_urls(chapter_url)
         self.metrics.record_api_call("page_urls")
 
