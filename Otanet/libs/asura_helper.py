@@ -15,7 +15,7 @@ from metrics_collector import MetricsCollector
 #
 # Public interface (mirrors MangaDexHelper exactly):
 #   get_recent_manga(offset)      -> list[dict]
-#   get_requested_manga(manga_id) -> dict
+#   get_requested_manga(manga_id) -> dict | None
 #   set_latest_chapters(manga)    -> bool
 #   download_chapters(manga)      -> None
 #
@@ -40,9 +40,10 @@ from metrics_collector import MetricsCollector
 BASE_URL       = "https://asuracomic.net"
 ITEMS_PER_PAGE = 20   # series cards per listing page
 
-# Shared session with full browser-like headers.
-# A persistent session also carries cookies automatically between requests,
-# which many sites require after the first page load.
+# Shared session with browser-like headers.
+# Do NOT set Accept-Encoding manually — requests handles gzip/deflate
+# decompression automatically. Advertising brotli (br) without the brotli
+# package installed causes the server to send content requests cannot decode.
 _SESSION = requests.Session()
 _SESSION.headers.update({
     "User-Agent": (
@@ -50,23 +51,9 @@ _SESSION.headers.update({
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": (
-        "text/html,application/xhtml+xml,application/xml;"
-        "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,"
-        "application/signed-exchange;v=b3;q=0.7"
-    ),
-    "Accept-Language":  "en-US,en;q=0.9",
-    "Accept-Encoding":  "gzip, deflate, br",
-    "Connection":       "keep-alive",
-    "Cache-Control":    "max-age=0",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest":   "document",
-    "Sec-Fetch-Mode":   "navigate",
-    "Sec-Fetch-Site":   "none",
-    "Sec-Fetch-User":   "?1",
-    "Sec-CH-UA": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-    "Sec-CH-UA-Mobile":   "?0",
-    "Sec-CH-UA-Platform": '"Windows"',
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer": BASE_URL,
 })
 
 
@@ -91,10 +78,33 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().replace("\x00", "")
 
 
-def _slug_from_url(href: str) -> str:
+def _slug_from_url(href: str) -> str | None:
     """Extract the series slug from any AsuraComic series URL."""
     m = re.search(r"/series/([^/?#]+)", href)
     return m.group(1) if m else None
+
+
+def warmup_session() -> bool:
+    """
+    Call this ONCE from main.py before starting any worker threads.
+    Hits the homepage to acquire session cookies and verify connectivity.
+    Returns True if the site is reachable, False otherwise.
+    """
+    try:
+        resp = _SESSION.get(BASE_URL, timeout=10)
+        print(f"[AsuraComic] Warmup -> {resp.status_code}  (cookies: {dict(resp.cookies)})")
+        if resp.status_code == 200:
+            return True
+        print(f"[AsuraComic] WARNING: Warmup returned {resp.status_code}. "
+              f"The site may be blocking server/datacenter IPs.")
+        return False
+    except requests.Timeout:
+        print("[AsuraComic] Warmup TIMED OUT – the site may be blocking this IP. "
+              "Consider using a residential proxy.")
+        return False
+    except Exception as exc:
+        print(f"[AsuraComic] Warmup failed: {exc}")
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -106,61 +116,43 @@ class AsuraComicHelper:
         self.metrics   = MetricsCollector()
         # Maps  hash → slug  so we can reconstruct URLs after the ID loses the slug
         self._slug_map: dict[str, str] = {}
-        self._warmup()
-
-    def _warmup(self) -> None:
-        """
-        Hit the homepage once to collect any session cookies the site sets
-        before serving content, and confirm connectivity.
-        """
-        try:
-            resp = _SESSION.get(BASE_URL, timeout=30)
-            print(f"[AsuraComic] Warmup GET {BASE_URL} -> {resp.status_code}")
-        except Exception as exc:
-            print(f"[AsuraComic] Warmup failed (will retry on first real request): {exc}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # HTTP fetch
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _get_html(self, url: str, retries: int = 4) -> str:
+    def _get_html(self, url: str, retries: int = 3) -> str | None:
         for attempt in range(retries):
             try:
-                resp = _SESSION.get(url, timeout=30, verify=True)
+                resp = _SESSION.get(url, timeout=10)
                 resp.raise_for_status()
-                print(f"[AsuraComic] GET {url} -> {resp.status_code} "
-                      f"({len(resp.content)} bytes)")
+                print(f"[AsuraComic] GET {url} -> {resp.status_code} ({len(resp.content)} bytes)")
                 return resp.text
             except requests.HTTPError as exc:
                 status = exc.response.status_code if exc.response else "unknown"
                 if status == 429:
-                    wait = 60 * (attempt + 1)
+                    wait = 60
                     print(f"[AsuraComic] Rate-limited (429) – sleeping {wait}s")
                     self.metrics.record_error("rate_limits")
-                    time.sleep(wait)
                 else:
-                    wait = 2 ** attempt + random.uniform(0, 2)
-                    print(f"[AsuraComic] HTTP {status} on {url} "
-                          f"(attempt {attempt + 1}) – retrying in {wait:.1f}s")
+                    wait = 3 * (attempt + 1) + random.uniform(0, 2)
+                    print(f"[AsuraComic] HTTP {status} on {url} (attempt {attempt + 1}) – retrying in {wait:.1f}s")
                     self.metrics.record_error("api_errors")
-                    time.sleep(wait)
-            except requests.ConnectionError as exc:
-                wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"[AsuraComic] Connection error on {url} "
-                      f"(attempt {attempt + 1}): {exc} – retrying in {wait:.1f}s")
-                self.metrics.record_error("api_errors")
                 time.sleep(wait)
             except requests.Timeout:
-                wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"[AsuraComic] Timeout on {url} "
-                      f"(attempt {attempt + 1}) – retrying in {wait:.1f}s")
+                wait = 3 * (attempt + 1) + random.uniform(0, 2)
+                print(f"[AsuraComic] Timeout on {url} (attempt {attempt + 1}) – retrying in {wait:.1f}s")
+                print(f"[AsuraComic] NOTE: Repeated timeouts may indicate the server is blocking this IP.")
+                self.metrics.record_error("api_errors")
+                time.sleep(wait)
+            except requests.ConnectionError as exc:
+                wait = 3 * (attempt + 1) + random.uniform(0, 2)
+                print(f"[AsuraComic] Connection error on {url} (attempt {attempt + 1}): {exc} – retrying in {wait:.1f}s")
                 self.metrics.record_error("api_errors")
                 time.sleep(wait)
             except Exception as exc:
-                wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"[AsuraComic] Unexpected error on {url} "
-                      f"(attempt {attempt + 1}): {type(exc).__name__}: {exc} "
-                      f"– retrying in {wait:.1f}s")
+                wait = 3 * (attempt + 1) + random.uniform(0, 2)
+                print(f"[AsuraComic] Unexpected {type(exc).__name__} on {url} (attempt {attempt + 1}): {exc} – retrying in {wait:.1f}s")
                 self.metrics.record_error("api_errors")
                 time.sleep(wait)
 
@@ -171,7 +163,7 @@ class AsuraComicHelper:
     # Slug lookup (needed because the hash no longer embeds the slug)
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _slug_for(self, manga_id: str) -> str:
+    def _slug_for(self, manga_id: str) -> str | None:
         slug = self._slug_map.get(manga_id)
         if not slug:
             print(f"[AsuraComic] WARNING: no slug cached for {manga_id}")
@@ -238,7 +230,7 @@ class AsuraComicHelper:
     # Detail page  –  /series/<slug>
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict:
+    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict | None:
         try:
             # ── Title ─────────────────────────────────────────────────────────
             # <span class="text-xl font-bold">...</span>
@@ -390,7 +382,7 @@ class AsuraComicHelper:
         soup = BeautifulSoup(html, "html.parser")
         return self._parse_list_page(soup)
 
-    def get_requested_manga(self, manga_id: str) -> dict:
+    def get_requested_manga(self, manga_id: str) -> dict | None:
         slug = self._slug_for(manga_id)
         if not slug:
             return None
@@ -529,7 +521,7 @@ class AsuraComicHelper:
         manga_name: str,
         chapter_num: str,
         existing_pages: set,
-    ) -> dict:
+    ) -> dict | None:
         page_urls = self._get_chapter_page_urls(chapter_url)
         self.metrics.record_api_call("page_urls")
 
