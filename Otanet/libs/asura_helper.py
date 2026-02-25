@@ -15,23 +15,29 @@ from metrics_collector import MetricsCollector
 #
 # Public interface (mirrors MangaDexHelper exactly):
 #   get_recent_manga(offset)      -> list[dict]
-#   get_requested_manga(manga_id) -> dict
+#   get_requested_manga(manga_id) -> dict | None
 #   set_latest_chapters(manga)    -> bool
-#   download_chapters(manga)     
+#   download_chapters(manga)      -> None
 #
 # ID / Hash strategy
 # ──────────────────
-# manga `id` is stored as  "asura_<slug>"  (e.g. "asura_volcanic-age-0831b5e3")
-# which uniquely namespaces AsuraComic entries from MangaDex entries in the
-# shared manga_metadata table and keeps table-name generation identical to the
-# MangaDex path (manga_id.replace("-", "_")).
+# Each manga is assigned a deterministic ID in the format:
+#   as-XXXXXXXX-XXXXXXXX
+# where the two 8-character hex groups are built from the ASCII values of the
+# manga title's characters (each char → 2-digit lowercase hex, concatenated,
+# then split into the first 8 and next 8 hex digits, zero-padded if needed).
 #
-# The `hash` column value is the manga_id string itself — deterministic and
-# unique, matching the contract that SQLiteHelper expects.
+# Example: "Nano Machine"
+#   N=4e  a=61  n=6e  o=6f  (space)=20  M=4d  a=61  c=63  h=68  i=69  n=6e  e=65
+#   hex string → "4e616e6f204d6163..."
+#   ID         → "as-4e616e6f-204d6163"
+#
+# Because the ID no longer embeds the slug, AsuraComicHelper keeps an internal
+# {hash → slug} map (self._slug_map) populated during get_recent_manga() so
+# that set_latest_chapters() and download_chapters() can still build URLs.
 # ─────────────────────────────────────────────────────────────────────────────
 
 BASE_URL       = "https://asuracomic.net"
-SOURCE_PREFIX  = "asura_"
 ITEMS_PER_PAGE = 20   # series cards per listing page
 
 # Shared session with browser-like headers
@@ -50,12 +56,17 @@ _SESSION.headers.update({
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
-def _id_from_slug(slug: str) -> str:
-    return f"{SOURCE_PREFIX}{slug}"
+def _make_hash(title: str) -> str:
+    """
+    Build a deterministic ID from the manga title's ASCII values.
 
-
-def _slug_from_id(manga_id: str) -> str:
-    return manga_id[len(SOURCE_PREFIX):]
+    Each character is converted to its 2-digit lowercase hex ASCII value.
+    The resulting string is split into two 8-character groups (zero-padded
+    to 16 chars if the title is very short), yielding:
+        as-XXXXXXXX-XXXXXXXX
+    """
+    hex_str = "".join(f"{ord(c):02x}" for c in title).ljust(16, "0")
+    return f"as-{hex_str[:8]}-{hex_str[8:16]}"
 
 
 def _normalize(text: str) -> str:
@@ -64,8 +75,8 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().replace("\x00", "")
 
 
-def _slug_from_url(href: str) -> str:
-    """Extract series slug from any AsuraComic series URL."""
+def _slug_from_url(href: str) -> str | None:
+    """Extract the series slug from any AsuraComic series URL."""
     m = re.search(r"/series/([^/?#]+)", href)
     return m.group(1) if m else None
 
@@ -75,14 +86,16 @@ def _slug_from_url(href: str) -> str:
 class AsuraComicHelper:
 
     def __init__(self):
-        self.db      = SQLiteHelper()
-        self.metrics = MetricsCollector()
+        self.db        = SQLiteHelper()
+        self.metrics   = MetricsCollector()
+        # Maps  hash → slug  so we can reconstruct URLs after the ID loses the slug
+        self._slug_map: dict[str, str] = {}
 
     # ─────────────────────────────────────────────────────────────────────────
     # HTTP fetch
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _get_html(self, url: str, retries: int = 4) -> str:
+    def _get_html(self, url: str, retries: int = 4) -> str | None:
         for attempt in range(retries):
             try:
                 resp = _SESSION.get(url, timeout=30)
@@ -97,7 +110,7 @@ class AsuraComicHelper:
                     time.sleep(wait)
                 else:
                     wait = 2 ** attempt + random.uniform(0, 2)
-                    print(f"[AsuraComic] HTTP {status} on {url} (attempt {attempt+1}) "
+                    print(f"[AsuraComic] HTTP {status} on {url} (attempt {attempt + 1}) "
                           f"– retrying in {wait:.1f}s")
                     self.metrics.record_error("api_errors")
                     time.sleep(wait)
@@ -111,12 +124,22 @@ class AsuraComicHelper:
         return None
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Slug lookup (needed because the hash no longer embeds the slug)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _slug_for(self, manga_id: str) -> str | None:
+        slug = self._slug_map.get(manga_id)
+        if not slug:
+            print(f"[AsuraComic] WARNING: no slug cached for {manga_id}")
+        return slug
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Listing page  –  /series?page=N
     # ─────────────────────────────────────────────────────────────────────────
 
     def _parse_list_page(self, soup: BeautifulSoup) -> list[dict]:
         manga_list: list[dict] = []
-        seen: set              = set()
+        seen_slugs: set        = set()
 
         for anchor in soup.select("a[href*='/series/']"):
             try:
@@ -126,9 +149,9 @@ class AsuraComicHelper:
                     continue
 
                 slug = _slug_from_url(href)
-                if not slug or slug in seen:
+                if not slug or slug in seen_slugs:
                     continue
-                seen.add(slug)
+                seen_slugs.add(slug)
 
                 title_tag = (
                     anchor.select_one("span.font-bold")
@@ -141,6 +164,10 @@ class AsuraComicHelper:
                     else anchor.get("aria-label", slug.replace("-", " ").title())
                 )
 
+                manga_id = _make_hash(title)
+                # Cache slug so set_latest_chapters / download_chapters can build URLs
+                self._slug_map[manga_id] = slug
+
                 img   = anchor.select_one("img")
                 cover = ""
                 if img:
@@ -152,7 +179,7 @@ class AsuraComicHelper:
                     )
 
                 manga_list.append({
-                    "id":          _id_from_slug(slug),
+                    "id":          manga_id,
                     "title":       title,
                     "description": "",   # populated on detail fetch
                     "cover_img":   cover,
@@ -167,44 +194,49 @@ class AsuraComicHelper:
     # Detail page  –  /series/<slug>
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict:
+    def _parse_detail_page(self, soup: BeautifulSoup, manga_id: str) -> dict | None:
         try:
-            title_tag = (
-                soup.select_one("div.text-center span.text-xl.font-bold")
-                or soup.select_one("h1.text-xl")
-                or soup.select_one("h1")
-            )
+            # ── Title ─────────────────────────────────────────────────────────
+            # <span class="text-xl font-bold">...</span>
+            title_tag = soup.find(
+                "span",
+                class_=lambda c: c and "text-xl" in c.split() and "font-bold" in c.split()
+            ) or soup.find("h1")
             title = _normalize(title_tag.get_text()) if title_tag else "Unknown Title"
 
-            cover_tag = (
-                soup.select_one("img[alt='poster']")
-                or soup.select_one("div.relative img")
-                or soup.select_one(".series-cover img")
-            )
+            # ── Cover ─────────────────────────────────────────────────────────
+            cover_tag = soup.find("img", alt="poster") or soup.select_one("div.relative img")
             cover = ""
             if cover_tag:
                 cover = cover_tag.get("src") or cover_tag.get("data-src") or ""
 
-            desc_tag = (
-                soup.select_one("span.font-medium.text-sm")
-                or soup.select_one("div.summary__content")
-                or soup.select_one("p.summary")
+            # ── Description ───────────────────────────────────────────────────
+            # <span class="font-medium text-sm text-[#A2A2A2]">...</span>
+            # The class text-[#A2A2A2] contains brackets that break CSS selectors,
+            # so we use find() with a lambda to match on partial class membership.
+            desc_tag = soup.find(
+                "span",
+                class_=lambda c: c and "font-medium" in c.split()
+                                     and "text-sm" in c.split()
+                                     and any("A2A2A2" in cls for cls in c.split())
             )
             description = _normalize(desc_tag.get_text()) if desc_tag else ""
 
-            genre_els = (
-                soup.select("div.genres a")
-                or soup.select("button.inline-flex.items-center")
-                or soup.select("a[href*='/genre/']")
-                or soup.select("a[href*='?genres']")
+            # ── Genres ────────────────────────────────────────────────────────
+            # Genres are rendered as <button> elements inside a flex-wrap div.
+            # Example: <div class="flex flex-row flex-wrap gap-3"><button ...>Action</button>
+            genres_div = soup.find(
+                "div",
+                class_=lambda c: c and "flex-wrap" in c.split() and "gap-3" in c.split()
             )
-            seen_tags: set = set()
+            seen_tags: set  = set()
             tags: list[str] = []
-            for el in genre_els:
-                t = _normalize(el.get_text())
-                if t and t not in seen_tags:
-                    seen_tags.add(t)
-                    tags.append(t)
+            if genres_div:
+                for btn in genres_div.find_all("button"):
+                    t = _normalize(btn.get_text())
+                    if t and t not in seen_tags:
+                        seen_tags.add(t)
+                        tags.append(t)
 
             return {
                 "id":          manga_id,
@@ -223,8 +255,7 @@ class AsuraComicHelper:
 
     def _parse_chapter_list(self, soup: BeautifulSoup, slug: str) -> list[dict]:
         """
-        Returns chapters shaped identically to MangaDex feed items so that
-        MangaFactory / Manga.set_chapters() receives the expected structure:
+        Returns chapters shaped identically to MangaDex feed items:
             { "id": <full_chapter_url>, "attributes": {"chapter": "<num>"} }
         """
         chapter_anchors = (
@@ -233,19 +264,20 @@ class AsuraComicHelper:
         )
 
         chapters: list[dict] = []
-        seen_nums: set       = set()
+        seen_nums: set        = set()
 
         for a in chapter_anchors:
             href = a.get("href", "")
             m    = re.search(r"/chapter/([\d]+(?:[._-][\d]+)?)", href)
             if not m:
                 continue
-            # Normalise separators: "1-5" / "1_5"  ->  "1.5"
+            # Normalise separators: "1-5" / "1_5"  →  "1.5"
             ch_num = m.group(1).replace("_", ".").replace("-", ".")
             if ch_num in seen_nums:
                 continue
             seen_nums.add(ch_num)
 
+            # Always reconstruct from canonical parts — never trust the raw href path.
             full_url = f"{BASE_URL}/series/{slug}/chapter/{m.group(1)}"
             chapters.append({
                 "id":         full_url,
@@ -276,7 +308,7 @@ class AsuraComicHelper:
             or soup.select("img[alt*='chapter']")
         )
 
-        seen: set     = set()
+        seen: set       = set()
         urls: list[str] = []
         for img in images:
             src = (
@@ -314,9 +346,11 @@ class AsuraComicHelper:
         soup = BeautifulSoup(html, "html.parser")
         return self._parse_list_page(soup)
 
-    def get_requested_manga(self, manga_id: str) -> dict:
-        slug = _slug_from_id(manga_id)
-        url  = f"{BASE_URL}/series/{slug}"
+    def get_requested_manga(self, manga_id: str) -> dict | None:
+        slug = self._slug_for(manga_id)
+        if not slug:
+            return None
+        url = f"{BASE_URL}/series/{slug}"
 
         print(f"[AsuraComic] Fetching detail: {url}")
         html = self._get_html(url)
@@ -330,24 +364,37 @@ class AsuraComicHelper:
 
     def set_latest_chapters(self, manga) -> bool:
         """
-        Fetch chapter list, attach it to the manga object, return True if there
-        are new chapters to download.  Matches MangaDexHelper contract exactly.
+        Fetch the chapter list for *manga*, attach it to the manga object,
+        and return True if there are new chapters to download.
+        Matches MangaDexHelper.set_latest_chapters() contract exactly.
         """
-        slug  = _slug_from_id(manga.get_id())
-        url   = f"{BASE_URL}/series/{slug}"
+        slug = self._slug_for(manga.get_id())
+        if not slug:
+            return False
+        url = f"{BASE_URL}/series/{slug}"
 
+        # Use the hash directly as the table name (hyphens → underscores)
         table_name      = manga.get_id().replace("-", "_")
         existing_latest = self.db.get_manga_latest_chapter(table_name, manga.get_id())
 
         time.sleep(random.uniform(1, 4))
 
-        print(f"[AsuraComic] Fetching chapters for {manga.get_id()}")
+        print(f"[AsuraComic] Fetching chapters for {manga.get_id()} ({slug})")
         html = self._get_html(url)
         if not html:
             return False
 
         self.metrics.record_api_call("chapter_feed")
         soup     = BeautifulSoup(html, "html.parser")
+
+        # Also grab description + tags here since we have the detail page loaded
+        detail = self._parse_detail_page(soup, manga.get_id())
+        if detail:
+            if not manga.get_description() and detail.get("description"):
+                manga.set_description(detail["description"])
+            if not manga.get_tags() and detail.get("tags"):
+                manga.set_tags(detail["tags"])
+
         chapters = self._parse_chapter_list(soup, slug)
 
         if not chapters:
@@ -373,9 +420,10 @@ class AsuraComicHelper:
 
         return should_download
 
-    def download_chapters(self, manga):
+    def download_chapters(self, manga) -> None:
         """
         Iterate chapters and store only missing pages to the DB.
+        The page-URL table is named after the manga hash (manga.get_id()).
         Matches MangaDexHelper.download_chapters() contract exactly.
         """
         existing_chapters_status = self.db.get_chapters_with_status(manga.get_id())
@@ -401,6 +449,7 @@ class AsuraComicHelper:
             time.sleep(random.uniform(2, 6))
             print(f"[AsuraComic] Processing chapter {chapter_num}")
 
+            # Table is named after the manga hash so it matches the metadata hash column
             self.db.create_page_urls_table(manga.get_id())
 
             pages_info = self._store_chapter_pages(
@@ -436,7 +485,7 @@ class AsuraComicHelper:
         manga_name: str,
         chapter_num: str,
         existing_pages: set,
-    ) -> dict:
+    ) -> dict | None:
         page_urls = self._get_chapter_page_urls(chapter_url)
         self.metrics.record_api_call("page_urls")
 
@@ -483,7 +532,7 @@ class AsuraComicHelper:
         chapter_num: str,
         page_number: int,
         page_url: str,
-    ):
+    ) -> None:
         try:
             self.db.store_page_url(
                 manga_id=manga_id,
