@@ -2,14 +2,18 @@ import re
 import time
 import random
 import threading
+import os
 import requests
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 import threading
 import time
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from sqlite_helper import SQLiteHelper
 from metrics_collector import MetricsCollector
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AsuraComicHelper
@@ -53,13 +57,32 @@ _SESSION.headers.update({
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
+        "Chrome/122.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "en-US,en;q=0.9",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Referer": BASE_URL,
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive",
+     "Referer": BASE_URL,
 })
 
+RES_PROXY = os.getenv("RES_PROXY")
+
+if RES_PROXY:
+    _SESSION.proxies = {
+        "http": RES_PROXY,
+        "https": RES_PROXY,
+    }
+    print("[AsuraComic] Residential proxy enabled")
+
+retry = Retry(
+    total=5,
+    backoff_factor=1,
+    status_forcelist=[403, 429, 500, 502, 503, 504],
+)
+
+adapter = HTTPAdapter(max_retries=retry)
+_SESSION.mount("http://", adapter)
+_SESSION.mount("https://", adapter)
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
