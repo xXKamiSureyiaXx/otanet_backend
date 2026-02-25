@@ -3,12 +3,13 @@ import time
 import random
 import threading
 import requests
-import nest_asyncio
-from requests_html import HTMLSession
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+import threading
+import time
 from bs4 import BeautifulSoup
 from sqlite_helper import SQLiteHelper
 from metrics_collector import MetricsCollector
-nest_asyncio.apply()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AsuraComicHelper
@@ -330,47 +331,55 @@ class AsuraComicHelper:
     # Chapter image URLs
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _get_chapter_page_urls(self, chapter_url: str) -> list[str]:
-        print(f"[AsuraComic] Rendering chapter with Pyppeteer: {chapter_url}")
+    
 
-        session = HTMLSession()
+    def _create_driver(self):
+        options = uc.ChromeOptions()
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+
+        return uc.Chrome(options=options)
+
+    def _get_driver(self):
+        thread_id = threading.get_ident()
+        if not hasattr(self, "_drivers"):
+            self._drivers = {}
+            self._driver_lock = threading.Lock()
+
+        with self._driver_lock:
+            if thread_id not in self._drivers:
+                self._drivers[thread_id] = self._create_driver()
+            return self._drivers[thread_id]
+
+    def _get_chapter_page_urls(self, chapter_url: str) -> list[str]:
+        driver = self._get_driver()
 
         try:
-            r = session.get(chapter_url, timeout=20)
+            print(f"[AsuraComic] Rendering chapter")
 
-            # Execute JavaScript and wait for images
-            r.html.render(
-                timeout=30,
-                sleep=3,          # allow lazy-load to complete
-                scrolldown=5      # trigger lazy loading
-            )
+            driver.get(chapter_url)
+            time.sleep(3)
 
-            imgs = r.html.find("div.center img")
+            imgs = driver.find_elements(By.CSS_SELECTOR, "div.center img")
 
-            seen: set = set()
-            urls: list[str] = []
+            seen = set()
+            urls = []
 
             for img in imgs:
-                src = (
-                    img.attrs.get("src")
-                    or img.attrs.get("data-src")
-                    or img.attrs.get("data-lazy-src")
-                    or ""
-                ).strip()
-
-                if src.startswith("http") and src not in seen:
+                src = img.get_attribute("src")
+                if src and src.startswith("http") and src not in seen:
                     seen.add(src)
                     urls.append(src)
 
-            print(f"[AsuraComic] Found {len(urls)} page URLs in {chapter_url}")
+            print(f"[AsuraComic] Found {len(urls)} pages")
             return urls
 
         except Exception as exc:
-            print(f"[AsuraComic] Pyppeteer render error: {exc}")
+            print(f"[AsuraComic] Browser error: {exc}")
             return []
-
-        finally:
-            session.close()
 
     # ─────────────────────────────────────────────────────────────────────────
     # Public API  (mirrors MangaDexHelper)
