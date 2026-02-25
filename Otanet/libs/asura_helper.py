@@ -40,7 +40,9 @@ from metrics_collector import MetricsCollector
 BASE_URL       = "https://asuracomic.net"
 ITEMS_PER_PAGE = 20   # series cards per listing page
 
-# Shared session with browser-like headers
+# Shared session with full browser-like headers.
+# A persistent session also carries cookies automatically between requests,
+# which many sites require after the first page load.
 _SESSION = requests.Session()
 _SESSION.headers.update({
     "User-Agent": (
@@ -48,9 +50,23 @@ _SESSION.headers.update({
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Referer": BASE_URL,
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;"
+        "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
+    "Accept-Language":  "en-US,en;q=0.9",
+    "Accept-Encoding":  "gzip, deflate, br",
+    "Connection":       "keep-alive",
+    "Cache-Control":    "max-age=0",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest":   "document",
+    "Sec-Fetch-Mode":   "navigate",
+    "Sec-Fetch-Site":   "none",
+    "Sec-Fetch-User":   "?1",
+    "Sec-CH-UA": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-CH-UA-Mobile":   "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
 })
 
 
@@ -90,6 +106,18 @@ class AsuraComicHelper:
         self.metrics   = MetricsCollector()
         # Maps  hash → slug  so we can reconstruct URLs after the ID loses the slug
         self._slug_map: dict[str, str] = {}
+        self._warmup()
+
+    def _warmup(self) -> None:
+        """
+        Hit the homepage once to collect any session cookies the site sets
+        before serving content, and confirm connectivity.
+        """
+        try:
+            resp = _SESSION.get(BASE_URL, timeout=30)
+            print(f"[AsuraComic] Warmup GET {BASE_URL} -> {resp.status_code}")
+        except Exception as exc:
+            print(f"[AsuraComic] Warmup failed (will retry on first real request): {exc}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # HTTP fetch
@@ -98,11 +126,13 @@ class AsuraComicHelper:
     def _get_html(self, url: str, retries: int = 4) -> str:
         for attempt in range(retries):
             try:
-                resp = _SESSION.get(url, timeout=30)
+                resp = _SESSION.get(url, timeout=30, verify=True)
                 resp.raise_for_status()
+                print(f"[AsuraComic] GET {url} -> {resp.status_code} "
+                      f"({len(resp.content)} bytes)")
                 return resp.text
             except requests.HTTPError as exc:
-                status = exc.response.status_code if exc.response else 0
+                status = exc.response.status_code if exc.response else "unknown"
                 if status == 429:
                     wait = 60 * (attempt + 1)
                     print(f"[AsuraComic] Rate-limited (429) – sleeping {wait}s")
@@ -110,13 +140,27 @@ class AsuraComicHelper:
                     time.sleep(wait)
                 else:
                     wait = 2 ** attempt + random.uniform(0, 2)
-                    print(f"[AsuraComic] HTTP {status} on {url} (attempt {attempt + 1}) "
-                          f"– retrying in {wait:.1f}s")
+                    print(f"[AsuraComic] HTTP {status} on {url} "
+                          f"(attempt {attempt + 1}) – retrying in {wait:.1f}s")
                     self.metrics.record_error("api_errors")
                     time.sleep(wait)
+            except requests.ConnectionError as exc:
+                wait = 2 ** attempt + random.uniform(0, 2)
+                print(f"[AsuraComic] Connection error on {url} "
+                      f"(attempt {attempt + 1}): {exc} – retrying in {wait:.1f}s")
+                self.metrics.record_error("api_errors")
+                time.sleep(wait)
+            except requests.Timeout:
+                wait = 2 ** attempt + random.uniform(0, 2)
+                print(f"[AsuraComic] Timeout on {url} "
+                      f"(attempt {attempt + 1}) – retrying in {wait:.1f}s")
+                self.metrics.record_error("api_errors")
+                time.sleep(wait)
             except Exception as exc:
                 wait = 2 ** attempt + random.uniform(0, 2)
-                print(f"[AsuraComic] Request error: {exc} – retrying in {wait:.1f}s")
+                print(f"[AsuraComic] Unexpected error on {url} "
+                      f"(attempt {attempt + 1}): {type(exc).__name__}: {exc} "
+                      f"– retrying in {wait:.1f}s")
                 self.metrics.record_error("api_errors")
                 time.sleep(wait)
 
