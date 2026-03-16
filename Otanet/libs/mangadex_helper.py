@@ -197,9 +197,9 @@ class MangaDexHelper:
             try:
                 title = (
                     self.utils.normalize_database_text(manga["data"]["attributes"]["title"]["en"])
+                    or self.utils.normalize_database_text(manga["data"]["attributes"]["altTitles"]["en"][0])
                     or self.utils.normalize_database_text(manga["data"]["attributes"]["title"]["ja-ro"])
-                    or self.utils.normalize_database_text(manga["data"]["attributes"]["altTitles"]["en"])
-                    or self.utils.normalize_database_text(manga["data"]["attributes"]["altTitles"]["ja-ro"]))
+                    or self.utils.normalize_database_text(manga["data"]["attributes"]["altTitles"]["ja-ro"][0]))
             except:
                 title = "Title Not Available"
 
